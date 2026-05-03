@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from "./supabase";
+import { createSupabaseServiceRoleClient } from "./supabase";
 import type { Portfolio } from "./types";
 
 export const STARTING_CASH = 100_000;
@@ -26,7 +26,7 @@ function parseCash(v: unknown): number {
 }
 
 export async function readPortfolio(): Promise<Portfolio> {
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseServiceRoleClient();
 
   let { data: row, error } = await supabase
     .from("portfolios")
@@ -72,7 +72,7 @@ export async function readPortfolio(): Promise<Portfolio> {
 }
 
 export async function writePortfolio(p: Portfolio): Promise<void> {
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseServiceRoleClient();
   const cash = roundMoney(p.cash);
 
   const { error: delErr } = await supabase

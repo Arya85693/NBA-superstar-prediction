@@ -20,6 +20,24 @@ export function createSupabaseServerClient(): SupabaseClient {
 }
 
 /**
+ * Server-only: bypasses RLS. Use only in Route Handlers / Server Components for
+ * tables revoked from `anon` (e.g. `portfolios` / `positions`). Never expose
+ * `SUPABASE_SERVICE_ROLE_KEY` as `NEXT_PUBLIC_*`.
+ */
+export function createSupabaseServiceRoleClient(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Missing SUPABASE_SERVICE_ROLE_KEY or Supabase URL. Add the service role key to Vercel (server env only) and web/.env.local — never NEXT_PUBLIC_*.",
+    );
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/**
  * Browser: single shared client (module singleton).
  * Use only from Client Components / client-side code paths.
  */
