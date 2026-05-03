@@ -12,7 +12,3 @@ export function pricesCsvPath(): string {
 export function activePlayersCsvPath(): string {
   return path.join(getDataDir(), "active_players.csv");
 }
-
-export function portfolioJsonPath(): string {
-  return path.join(getDataDir(), "paper_portfolio.json");
-}

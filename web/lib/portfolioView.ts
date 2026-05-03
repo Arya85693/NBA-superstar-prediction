@@ -29,7 +29,7 @@ export type PortfolioSnapshot = {
 };
 
 export async function getPortfolioSnapshot(): Promise<PortfolioSnapshot> {
-  const pf = readPortfolio();
+  const pf = await readPortfolio();
   const quotes = await loadLatestQuotes(false);
 
   let positionsValue = 0;

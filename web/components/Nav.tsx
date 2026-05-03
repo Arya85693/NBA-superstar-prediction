@@ -98,6 +98,7 @@ export function Nav() {
                 <Link
                   key={t.href}
                   href={t.href}
+                  prefetch
                   className={
                     active
                       ? "-mb-px border-b-2 border-emerald-500 px-2 pb-3 text-sm font-medium text-zinc-100"

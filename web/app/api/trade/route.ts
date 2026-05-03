@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   const price = quote.price_after_game;
   const gross = roundMoney(price * shares);
 
-  const pf = readPortfolio();
+  const pf = await readPortfolio();
   const key = String(playerId);
   const held = pf.positions[key] ?? 0;
 
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     else pf.positions[key] = next;
   }
 
-  writePortfolio(pf);
+  await writePortfolio(pf);
 
   return NextResponse.json({
     ok: true,
