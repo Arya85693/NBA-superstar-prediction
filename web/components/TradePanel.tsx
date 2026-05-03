@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
+import { maxWholeSharesAtPrice, usePortfolioCash } from "@/hooks/usePortfolioCash";
 
 type Props = {
   playerId: number;
@@ -13,12 +15,17 @@ type Props = {
 
 export function TradePanel({ playerId, playerName, price, ticker }: Props) {
   const router = useRouter();
+  const { cash, state: portfolioState } = usePortfolioCash();
   const [shares, setShares] = useState("1");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const n = Math.max(1, Math.floor(Number(shares) || 0));
   const est = formatUsd(price * n);
+  const maxBuyShares =
+    portfolioState === "ok" && cash !== null
+      ? maxWholeSharesAtPrice(cash, price)
+      : null;
 
   async function trade(side: "buy" | "sell") {
     setBusy(true);
@@ -52,6 +59,9 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
           <span className="ml-2 font-mono text-emerald-500/90">· {ticker}</span>
         )}
       </h3>
+      <div className="mb-4 rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+        <BuyingPower cash={cash} state={portfolioState} />
+      </div>
       <p className="mb-3 font-mono text-2xl text-zinc-100">
         {formatUsd(price)}
         <span className="ml-2 text-sm font-sans text-zinc-500">/ sh</span>
@@ -65,7 +75,23 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
         onChange={(e) => setShares(e.target.value)}
         className="mb-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-zinc-100"
       />
-      <p className="mb-4 text-sm text-zinc-500">Est. {est}</p>
+      <div className="mb-4 space-y-1 text-sm text-zinc-500">
+        <p>Est. {est}</p>
+        {portfolioState === "ok" && cash !== null && maxBuyShares !== null && (
+          <p className="text-xs text-zinc-500">
+            {maxBuyShares >= 1 ? (
+              <>
+                Up to <span className="font-mono text-zinc-400">{maxBuyShares}</span> share
+                {maxBuyShares === 1 ? "" : "s"} at this price.
+              </>
+            ) : (
+              <span className="text-amber-200/90">
+                Buying power below one share at {formatUsd(price)} / sh.
+              </span>
+            )}
+          </p>
+        )}
+      </div>
       <div className="flex gap-3">
         <button
           type="button"

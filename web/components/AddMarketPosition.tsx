@@ -2,11 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
+import { maxWholeSharesAtPrice, usePortfolioCash } from "@/hooks/usePortfolioCash";
 import type { MarketRow } from "@/lib/types";
 
 export function AddMarketPosition() {
   const router = useRouter();
+  const { cash, state: portfolioState } = usePortfolioCash();
   const [rows, setRows] = useState<MarketRow[] | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -53,6 +56,11 @@ export function AddMarketPosition() {
 
   const n = Math.max(1, Math.floor(Number(shares) || 0));
 
+  const maxBuyShares =
+    selected && portfolioState === "ok" && cash !== null
+      ? maxWholeSharesAtPrice(cash, selected.price_after_game)
+      : null;
+
   async function buy() {
     if (!selected) return;
     setBusy(true);
@@ -90,6 +98,10 @@ export function AddMarketPosition() {
       <p className="mt-1 text-sm text-zinc-500">
         Search the same market list and add a new position without leaving this page.
       </p>
+
+      <div className="mt-4 rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+        <BuyingPower cash={cash} state={portfolioState} />
+      </div>
 
       {loadErr && (
         <p className="mt-3 text-sm text-rose-400">{loadErr}</p>
@@ -157,6 +169,21 @@ export function AddMarketPosition() {
                 <p className="font-mono text-lg text-zinc-100">
                   {formatUsd(selected.price_after_game)}
                 </p>
+                {portfolioState === "ok" && cash !== null && maxBuyShares !== null && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {maxBuyShares >= 1 ? (
+                      <>
+                        Up to{" "}
+                        <span className="font-mono text-zinc-400">{maxBuyShares}</span> share
+                        {maxBuyShares === 1 ? "" : "s"} at this price.
+                      </>
+                    ) : (
+                      <span className="text-amber-200/90">
+                        Not enough buying power for one share.
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
               <div className="sm:ml-4">
                 <label className="mb-1.5 block text-xs text-zinc-500">Shares</label>

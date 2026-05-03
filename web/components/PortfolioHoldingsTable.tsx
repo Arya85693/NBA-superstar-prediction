@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
+import { usePortfolioCash } from "@/hooks/usePortfolioCash";
 import type { PositionRow } from "@/lib/portfolioView";
 
 function pct(n: number) {
@@ -16,6 +18,7 @@ export function PortfolioHoldingsTable({
   positions: PositionRow[];
 }) {
   const router = useRouter();
+  const { cash, state: portfolioState } = usePortfolioCash();
   const [qty, setQty] = useState<Record<number, string>>({});
   const [busyId, setBusyId] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -71,6 +74,9 @@ export function PortfolioHoldingsTable({
 
   return (
     <div>
+      <div className="mb-3 rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+        <BuyingPower cash={cash} state={portfolioState} />
+      </div>
       {msg && (
         <p className="mb-3 rounded-lg border border-rose-900/50 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
           {msg}
