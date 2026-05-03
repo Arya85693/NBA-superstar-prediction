@@ -1,0 +1,3 @@
+# Python pipeline (see pipeline/) — collection, cleaning, game score, pricing
+pandas>=2.0.0
+nba_api>=1.2.0

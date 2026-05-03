@@ -1,0 +1,89 @@
+import { loadLatestQuotes } from "./marketData";
+import { readPortfolio, roundMoney, STARTING_CASH } from "./portfolioStore";
+
+export type PositionRow = {
+  player_id: number;
+  shares: number;
+  price: number | null;
+  value: number;
+  name: string;
+  team_abbr: string;
+  /** Share of total portfolio value (cash + all positions), 0–100 */
+  allocationPct: number;
+};
+
+export type PortfolioSnapshot = {
+  cash: number;
+  positions: PositionRow[];
+  positionsValue: number;
+  total: number;
+  startingCash: number;
+  /** Cash as % of total equity */
+  cashPct: number;
+  /** Market value of stock positions as % of total equity */
+  equitiesPct: number;
+  /** Total equity minus starting cash */
+  totalReturn: number;
+  /** Percent gain/loss vs starting cash */
+  totalReturnPct: number;
+};
+
+export async function getPortfolioSnapshot(): Promise<PortfolioSnapshot> {
+  const pf = readPortfolio();
+  const quotes = await loadLatestQuotes(false);
+
+  let positionsValue = 0;
+  const raw: Omit<PositionRow, "allocationPct">[] = [];
+
+  for (const [pidStr, shares] of Object.entries(pf.positions)) {
+    if (shares <= 0) continue;
+    const pid = Number(pidStr);
+    const q = quotes.get(pid);
+    const price = q?.price_after_game ?? null;
+    const value = price !== null ? roundMoney(price * shares) : 0;
+    positionsValue += value;
+    raw.push({
+      player_id: pid,
+      shares,
+      price,
+      value,
+      name: q?.player_name ?? `#${pid}`,
+      team_abbr: q?.team_abbr ?? "",
+    });
+  }
+
+  raw.sort((a, b) => b.value - a.value);
+
+  const cash = roundMoney(pf.cash);
+  positionsValue = roundMoney(positionsValue);
+  const total = roundMoney(cash + positionsValue);
+
+  const cashPct =
+    total > 0 ? roundMoney((cash / total) * 100) : cash > 0 ? 100 : 0;
+  const equitiesPct =
+    total > 0 ? roundMoney((positionsValue / total) * 100) : 0;
+
+  const totalReturn = roundMoney(total - STARTING_CASH);
+  const totalReturnPct =
+    STARTING_CASH > 0
+      ? roundMoney(((total - STARTING_CASH) / STARTING_CASH) * 100)
+      : 0;
+
+  const positions: PositionRow[] = raw.map((p) => ({
+    ...p,
+    allocationPct:
+      total > 0 ? roundMoney((p.value / total) * 100) : 0,
+  }));
+
+  return {
+    cash,
+    positions,
+    positionsValue,
+    total,
+    startingCash: STARTING_CASH,
+    cashPct,
+    equitiesPct,
+    totalReturn,
+    totalReturnPct,
+  };
+}
