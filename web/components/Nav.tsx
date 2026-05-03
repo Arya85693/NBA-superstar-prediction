@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 
 import { formatUsd } from "@/lib/format";
 
-type Pf = { cash: number; total: number } | null;
+type Pf = { cash: number; total: number };
+
+type PortfolioFetch = "loading" | "ok" | "error";
 
 const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: "/", label: "Home", match: (p) => p === "/" },
@@ -25,23 +27,53 @@ const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
 
 export function Nav() {
   const path = usePathname();
-  const [pf, setPf] = useState<Pf>(null);
+  const [pf, setPf] = useState<Pf | null>(null);
+  const [portfolioFetch, setPortfolioFetch] = useState<PortfolioFetch>("loading");
 
   useEffect(() => {
-    let ok = true;
+    let alive = true;
     function load() {
       fetch("/api/portfolio")
-        .then((r) => r.json())
-        .then((d) => {
-          if (ok && d.cash != null) setPf({ cash: d.cash, total: d.total });
+        .then(async (r) => {
+          const d = (await r.json()) as {
+            cash?: number;
+            total?: number;
+            error?: string;
+          };
+          return { ok: r.ok, d };
         })
-        .catch(() => {});
+        .then(({ ok, d }) => {
+          if (!alive) return;
+          if (
+            ok &&
+            typeof d.cash === "number" &&
+            Number.isFinite(d.cash)
+          ) {
+            setPf({
+              cash: d.cash,
+              total:
+                typeof d.total === "number" && Number.isFinite(d.total)
+                  ? d.total
+                  : d.cash,
+            });
+            setPortfolioFetch("ok");
+          } else {
+            setPf(null);
+            setPortfolioFetch("error");
+          }
+        })
+        .catch(() => {
+          if (!alive) return;
+          setPf(null);
+          setPortfolioFetch("error");
+        });
     }
+    setPortfolioFetch("loading");
     load();
     const onUp = () => load();
     window.addEventListener("portfolio-updated", onUp);
     return () => {
-      ok = false;
+      alive = false;
       window.removeEventListener("portfolio-updated", onUp);
     };
   }, [path]);
@@ -78,16 +110,24 @@ export function Nav() {
             })}
           </nav>
         </div>
-        {pf && (
-          <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
-            <div className="text-right text-sm">
-              <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-                Buying power
-              </div>
-              <div className="font-mono text-emerald-400">{formatUsd(pf.cash)}</div>
+        <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
+          <div className="text-right text-sm">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-500">
+              Buying power
             </div>
+            {portfolioFetch === "loading" && (
+              <div className="font-mono text-emerald-400/70">…</div>
+            )}
+            {portfolioFetch === "ok" && pf && (
+              <div className="font-mono text-emerald-400">{formatUsd(pf.cash)}</div>
+            )}
+            {portfolioFetch === "error" && (
+              <div className="max-w-[9rem] text-xs leading-snug text-zinc-500">
+                Couldn&apos;t load
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </header>
   );

@@ -177,7 +177,7 @@ export default async function PlayerPage({
           <PlayerChartSection history={history} />
         </div>
 
-        <div className="w-full shrink-0 lg:w-80">
+        <div className="w-full shrink-0 lg:w-80 lg:self-start lg:sticky lg:top-20 lg:z-10">
           <TradePanel
             playerId={playerId}
             playerName={quote.player_name}

@@ -34,8 +34,17 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="app-noise min-h-full flex flex-col bg-zinc-950 text-zinc-100">
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         <Nav />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:py-10">{children}</main>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 outline-none md:py-10"
+        >
+          {children}
+        </main>
         <footer className="border-t border-zinc-800/90 bg-zinc-950/80 py-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 text-xs text-zinc-600 sm:flex-row sm:items-center sm:justify-between">
             <p className="max-w-md leading-relaxed">
