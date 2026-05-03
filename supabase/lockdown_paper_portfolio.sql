@@ -8,6 +8,8 @@
 revoke all on public.portfolios from anon, authenticated;
 revoke all on public.positions from anon, authenticated;
 
+-- PostgREST uses the JWT role; these grants must succeed (check the SQL Editor for errors).
+grant usage on schema public to service_role;
 grant select, insert, update, delete on public.portfolios to service_role;
 grant select, insert, update, delete on public.positions to service_role;
 

@@ -19,6 +19,26 @@ export function createSupabaseServerClient(): SupabaseClient {
   return createClient(url, anonKey);
 }
 
+function assertJwtRoleIsServiceRole(key: string): void {
+  const parts = key.split(".");
+  if (parts.length < 2) return;
+  try {
+    const json = Buffer.from(parts[1], "base64url").toString("utf8");
+    const payload = JSON.parse(json) as { role?: string };
+    const role = payload.role;
+    if (role && role !== "service_role") {
+      throw new Error(
+        `SUPABASE_SERVICE_ROLE_KEY is the wrong Supabase key (JWT role is "${role}", expected "service_role"). In Supabase → Project Settings → API, copy the service_role secret, not the anon key.`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("SUPABASE_SERVICE_ROLE_KEY is the wrong")) {
+      throw e;
+    }
+    /* ignore malformed JWT */
+  }
+}
+
 /**
  * Server-only: bypasses RLS. Use only in Route Handlers / Server Components for
  * tables revoked from `anon` (e.g. `portfolios` / `positions`). Never expose
@@ -32,7 +52,8 @@ export function createSupabaseServiceRoleClient(): SupabaseClient {
       "Missing SUPABASE_SERVICE_ROLE_KEY or Supabase URL. Add the service role key to Vercel (server env only) and web/.env.local — never NEXT_PUBLIC_*.",
     );
   }
-  return createClient(url, key, {
+  assertJwtRoleIsServiceRole(key.trim());
+  return createClient(url, key.trim(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
