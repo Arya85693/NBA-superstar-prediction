@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getLatestForPlayer } from "@/lib/marketData";
 import {
+  getPortfolioIdForUser,
   readPortfolio,
   roundMoney,
   writePortfolio,
 } from "@/lib/portfolioStore";
+import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,13 @@ export async function POST(req: Request) {
   const price = quote.price_after_game;
   const gross = roundMoney(price * shares);
 
-  const pf = await readPortfolio();
+  const supabaseAuth = await createSupabaseSessionServer();
+  const {
+    data: { user },
+  } = await supabaseAuth.auth.getUser();
+  const portfolioId = await getPortfolioIdForUser(user?.id ?? null);
+
+  const pf = await readPortfolio(portfolioId);
   const key = String(playerId);
   const held = pf.positions[key] ?? 0;
 
@@ -73,7 +81,7 @@ export async function POST(req: Request) {
     else pf.positions[key] = next;
   }
 
-  await writePortfolio(pf);
+  await writePortfolio(portfolioId, pf);
 
   return NextResponse.json({
     ok: true,

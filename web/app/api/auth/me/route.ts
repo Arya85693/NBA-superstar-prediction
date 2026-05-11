@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getPortfolioSnapshot } from "@/lib/portfolioView";
 import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +8,15 @@ export async function GET() {
     const supabase = await createSupabaseSessionServer();
     const {
       data: { user },
+      error,
     } = await supabase.auth.getUser();
-    const snap = await getPortfolioSnapshot(user?.id ?? null);
-    return NextResponse.json(snap);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Failed";
-    return NextResponse.json({ error: msg }, { status: 500 });
+    if (error || !user) {
+      return NextResponse.json({ user: null });
+    }
+    return NextResponse.json({
+      user: { id: user.id, email: user.email ?? null },
+    });
+  } catch {
+    return NextResponse.json({ user: null });
   }
 }

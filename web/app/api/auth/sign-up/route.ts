@@ -1,0 +1,58 @@
+import { NextResponse } from "next/server";
+
+import { getRequestOrigin } from "@/lib/requestOrigin";
+import { createSupabaseAuthRouteHandlerClient } from "@/lib/supabase-auth-route";
+
+export const dynamic = "force-dynamic";
+
+type Body = { email?: string; password?: string };
+
+export async function POST(request: Request) {
+  let body: Body;
+  try {
+    body = (await request.json()) as Body;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+
+  if (!email || !password) {
+    return NextResponse.json(
+      { error: "Email and password are required." },
+      { status: 400 },
+    );
+  }
+
+  if (password.length < 6) {
+    return NextResponse.json(
+      { error: "Password must be at least 6 characters." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const origin = getRequestOrigin(request);
+    const supabase = await createSupabaseAuthRouteHandlerClient();
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/login?confirmed=1")}`,
+      },
+    });
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Sign-up failed.";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}

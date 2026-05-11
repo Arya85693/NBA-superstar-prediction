@@ -1,5 +1,10 @@
 import { loadLatestQuotes } from "./marketData";
-import { readPortfolio, roundMoney, STARTING_CASH } from "./portfolioStore";
+import {
+  getPortfolioIdForUser,
+  readPortfolio,
+  roundMoney,
+  STARTING_CASH,
+} from "./portfolioStore";
 
 export type PositionRow = {
   player_id: number;
@@ -28,8 +33,12 @@ export type PortfolioSnapshot = {
   totalReturnPct: number;
 };
 
-export async function getPortfolioSnapshot(): Promise<PortfolioSnapshot> {
-  const pf = await readPortfolio();
+/** Pass `authUserId` from Supabase Auth (`user.id`), or `null` for guest demo portfolio. */
+export async function getPortfolioSnapshot(
+  authUserId: string | null,
+): Promise<PortfolioSnapshot> {
+  const portfolioId = await getPortfolioIdForUser(authUserId);
+  const pf = await readPortfolio(portfolioId);
   const quotes = await loadLatestQuotes(false);
 
   let positionsValue = 0;

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-let browserClient: SupabaseClient | undefined;
+import { createSupabaseSessionBrowser } from "./supabase-session-browser";
 
 function getEnv(): { url: string; anonKey: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,16 +59,9 @@ export function createSupabaseServiceRoleClient(): SupabaseClient {
 }
 
 /**
- * Browser: single shared client (module singleton).
+ * Browser: Supabase client with Auth session cookies (@supabase/ssr).
  * Use only from Client Components / client-side code paths.
  */
 export function getSupabaseBrowserClient(): SupabaseClient {
-  if (typeof window === "undefined") {
-    throw new Error("getSupabaseBrowserClient() must run in the browser.");
-  }
-  if (!browserClient) {
-    const { url, anonKey } = getEnv();
-    browserClient = createClient(url, anonKey);
-  }
-  return browserClient;
+  return createSupabaseSessionBrowser();
 }

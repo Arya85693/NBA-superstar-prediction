@@ -147,7 +147,13 @@ export function MarketTable({
   );
 
   useEffect(() => {
-    setShowAll(false);
+    let alive = true;
+    queueMicrotask(() => {
+      if (alive) setShowAll(false);
+    });
+    return () => {
+      alive = false;
+    };
   }, [q, sort]);
 
   const visible = useMemo(() => {

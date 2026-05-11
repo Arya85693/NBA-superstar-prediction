@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { formatUsd } from "@/lib/format";
+import { createSupabaseSessionBrowser } from "@/lib/supabase-session-browser";
 
 type Pf = { cash: number; total: number };
 
@@ -27,8 +28,31 @@ const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
 
 export function Nav() {
   const path = usePathname();
+  const router = useRouter();
   const [pf, setPf] = useState<Pf | null>(null);
   const [portfolioFetch, setPortfolioFetch] = useState<PortfolioFetch>("loading");
+  const [account, setAccount] = useState<
+    { id: string; email: string | null } | null | undefined
+  >(undefined);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/me")
+      .then((r) =>
+        r.json() as Promise<{ user: { id: string; email: string | null } | null }>,
+      )
+      .then((d) => {
+        if (!alive) return;
+        setAccount(d.user ?? null);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setAccount(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [path]);
 
   useEffect(() => {
     let alive = true;
@@ -68,9 +92,15 @@ export function Nav() {
           setPortfolioFetch("error");
         });
     }
-    setPortfolioFetch("loading");
-    load();
-    const onUp = () => load();
+    queueMicrotask(() => {
+      if (!alive) return;
+      setPortfolioFetch("loading");
+      load();
+    });
+    const onUp = () => {
+      setPortfolioFetch("loading");
+      load();
+    };
     window.addEventListener("portfolio-updated", onUp);
     return () => {
       alive = false;
@@ -111,7 +141,48 @@ export function Nav() {
             })}
           </nav>
         </div>
-        <div className="flex shrink-0 items-center gap-3 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-4 gap-y-2 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
+          <div className="flex items-center gap-2 text-xs">
+            {account === undefined && (
+              <span className="text-zinc-600" aria-hidden>
+                …
+              </span>
+            )}
+            {account === null && (
+              <Link
+                href="/login"
+                className="font-medium text-emerald-400/90 transition hover:text-emerald-300"
+              >
+                Log in
+              </Link>
+            )}
+            {account && (
+              <>
+                <span
+                  className="hidden max-w-[10rem] truncate text-zinc-500 sm:inline"
+                  title={account.email ?? undefined}
+                >
+                  {account.email ?? "Signed in"}
+                </span>
+                <button
+                  type="button"
+                  className="font-medium text-zinc-400 transition hover:text-rose-400"
+                  onClick={() => {
+                    void (async () => {
+                      const supabase = createSupabaseSessionBrowser();
+                      await supabase.auth.signOut();
+                      setAccount(null);
+                      router.refresh();
+                      window.dispatchEvent(new Event("portfolio-updated"));
+                      router.push("/login");
+                    })();
+                  }}
+                >
+                  Sign out
+                </button>
+              </>
+            )}
+          </div>
           <div className="text-right text-sm">
             <div className="text-[10px] uppercase tracking-wide text-zinc-500">
               Buying power

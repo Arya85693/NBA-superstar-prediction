@@ -3,7 +3,7 @@ import type { Portfolio } from "./types";
 
 export const STARTING_CASH = 100_000;
 
-/** Must match `supabase/init_paper_market.sql` seed row. */
+/** Must match `supabase/init_paper_market.sql` seed row (guest / demo). */
 export const PAPER_PORTFOLIO_ID =
   "00000000-0000-0000-0000-000000000001" as const;
 
@@ -25,13 +25,52 @@ function parseCash(v: unknown): number {
   return STARTING_CASH;
 }
 
-export async function readPortfolio(): Promise<Portfolio> {
+/**
+ * Resolve the portfolios.id row for this Supabase Auth user. Guests use the
+ * shared demo portfolio id. Creates a row if missing (e.g. trigger race).
+ */
+export async function getPortfolioIdForUser(userId: string | null): Promise<string> {
+  if (!userId) return PAPER_PORTFOLIO_ID;
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data: row, error } = await supabase
+    .from("portfolios")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase portfolios lookup: ${error.message}`);
+  }
+  if (row?.id) return row.id;
+
+  const { data: inserted, error: insErr } = await supabase
+    .from("portfolios")
+    .insert({ user_id: userId, cash: STARTING_CASH })
+    .select("id")
+    .single();
+
+  if (!insErr && inserted?.id) return inserted.id;
+
+  const { data: again } = await supabase
+    .from("portfolios")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (again?.id) return again.id;
+
+  throw new Error(
+    `Supabase portfolios create: ${insErr?.message ?? "unknown error"}`,
+  );
+}
+
+export async function readPortfolio(portfolioId: string): Promise<Portfolio> {
   const supabase = createSupabaseServiceRoleClient();
 
-  let { data: row, error } = await supabase
+  const { data: row, error } = await supabase
     .from("portfolios")
     .select("cash")
-    .eq("id", PAPER_PORTFOLIO_ID)
+    .eq("id", portfolioId)
     .maybeSingle();
 
   if (error) {
@@ -39,6 +78,9 @@ export async function readPortfolio(): Promise<Portfolio> {
   }
 
   if (!row) {
+    if (portfolioId !== PAPER_PORTFOLIO_ID) {
+      throw new Error("Portfolio not found for this account.");
+    }
     const { error: insErr } = await supabase.from("portfolios").insert({
       id: PAPER_PORTFOLIO_ID,
       cash: STARTING_CASH,
@@ -54,7 +96,7 @@ export async function readPortfolio(): Promise<Portfolio> {
   const { data: posRows, error: posErr } = await supabase
     .from("positions")
     .select("player_id, shares")
-    .eq("portfolio_id", PAPER_PORTFOLIO_ID);
+    .eq("portfolio_id", portfolioId);
 
   if (posErr) {
     throw new Error(`Supabase positions read: ${posErr.message}`);
@@ -71,14 +113,14 @@ export async function readPortfolio(): Promise<Portfolio> {
   return { cash, positions };
 }
 
-export async function writePortfolio(p: Portfolio): Promise<void> {
+export async function writePortfolio(portfolioId: string, p: Portfolio): Promise<void> {
   const supabase = createSupabaseServiceRoleClient();
   const cash = roundMoney(p.cash);
 
   const { error: delErr } = await supabase
     .from("positions")
     .delete()
-    .eq("portfolio_id", PAPER_PORTFOLIO_ID);
+    .eq("portfolio_id", portfolioId);
 
   if (delErr) {
     throw new Error(`Supabase positions clear: ${delErr.message}`);
@@ -86,7 +128,7 @@ export async function writePortfolio(p: Portfolio): Promise<void> {
 
   const rows = Object.entries(p.positions)
     .map(([pidStr, shares]) => ({
-      portfolio_id: PAPER_PORTFOLIO_ID,
+      portfolio_id: portfolioId,
       player_id: Number(pidStr),
       shares: Math.floor(Number(shares)),
     }))
@@ -102,7 +144,7 @@ export async function writePortfolio(p: Portfolio): Promise<void> {
   const { error: upErr } = await supabase
     .from("portfolios")
     .update({ cash, updated_at: new Date().toISOString() })
-    .eq("id", PAPER_PORTFOLIO_ID);
+    .eq("id", portfolioId);
 
   if (upErr) {
     throw new Error(`Supabase portfolios update: ${upErr.message}`);

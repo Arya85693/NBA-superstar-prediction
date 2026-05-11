@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PortfolioHoldingsTable } from "@/components/PortfolioHoldingsTable";
 import { formatUsd } from "@/lib/format";
 import { getPortfolioSnapshot } from "@/lib/portfolioView";
+import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,11 @@ function pct(n: number) {
 export default async function PortfolioPage() {
   let snap;
   try {
-    snap = await getPortfolioSnapshot();
+    const supabase = await createSupabaseSessionServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    snap = await getPortfolioSnapshot(user?.id ?? null);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
     return <p className="text-rose-400">{msg}</p>;
