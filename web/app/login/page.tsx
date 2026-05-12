@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 export default function LoginPage() {
   return (
@@ -30,6 +30,24 @@ function LoginForm() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => r.json() as Promise<{ user: { id: string } | null }>)
+      .then((data) => {
+        if (cancelled || !data.user) return;
+        window.location.assign("/");
+      })
+      .catch(() => {
+        /* stay on the page if auth status couldn't be checked */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
@@ -53,7 +71,7 @@ function LoginForm() {
       }
 
       router.refresh();
-      router.push("/");
+      window.location.assign("/");
     } catch {
       setErrorMessage("Network error — try again.");
     } finally {

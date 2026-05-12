@@ -116,7 +116,7 @@ export function Nav() {
             href="/"
             className="shrink-0 text-base font-semibold tracking-tight text-zinc-100"
           >
-            <span className="text-zinc-400">NBA</span> Paper Market
+            <span className="text-zinc-400">Hoops</span> Stock Market
           </Link>
           <nav
             className="flex flex-wrap items-end gap-1 sm:gap-6"

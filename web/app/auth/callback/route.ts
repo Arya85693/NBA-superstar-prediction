@@ -49,7 +49,7 @@ export async function GET(request: Request) {
    * Cookie writes must target this redirect response so exchange + signOut actually clear the
    * session cookies on the client (Route Handler + cookies() alone can miss outgoing Set-Cookie).
    */
-  let redirectResponse = NextResponse.redirect(dest);
+  const redirectResponse = NextResponse.redirect(dest);
 
   const incomingCookies = await cookies();
 

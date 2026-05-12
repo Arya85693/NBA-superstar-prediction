@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "NBA Paper Market",
-    template: "%s · NBA Paper Market",
+    default: "Hoops Stock Market",
+    template: "%s · Hoops Stock Market",
   },
   description:
     "Simulated NBA player market with paper trading — model-driven prices from your pipeline.",

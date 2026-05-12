@@ -1,6 +1,8 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-import { createSupabaseAuthRouteHandlerClient } from "@/lib/supabase-auth-route";
+import { GUEST_BROWSE_COOKIE } from "@/lib/guestBrowse";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,29 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createSupabaseAuthRouteHandlerClient();
+    const response = NextResponse.json({ ok: true });
+    const cookieStore = await cookies();
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      throw new Error(
+        "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+      );
+    }
+
+    const supabase = createServerClient(url, anonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookieList: { name: string; value: string; options?: object }[]) {
+          cookieList.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          );
+        },
+      },
+    });
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -38,7 +62,16 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true });
+    // Once a real account signs in, stop treating this browser as a guest session.
+    response.cookies.set(GUEST_BROWSE_COOKIE, "", {
+      path: "/",
+      maxAge: 0,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+    });
+
+    return response;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Sign-in failed.";
     return NextResponse.json({ error: msg }, { status: 500 });
