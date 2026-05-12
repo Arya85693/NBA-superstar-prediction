@@ -56,27 +56,31 @@ def collect_player_game_logs(
     start_year: int = DEFAULT_START_SEASON_START_YEAR,
     end_year: int = DEFAULT_END_SEASON_START_YEAR,
 ) -> pd.DataFrame:
-    """Every regular-season game appearance (one row per player per game)."""
+    """Every regular-season and playoff appearance (one row per player per game)."""
     frames = []
+    season_types = ("Regular Season", "Playoffs")
     for year in range(start_year, end_year + 1):
         season = _season_string(year)
-        print(f"Fetching player game logs for {season}...")
-        try:
-            data = leaguegamelog.LeagueGameLog(
-                season=season,
-                season_type_all_star="Regular Season",
-                player_or_team_abbreviation="P",
-            )
-            df = data.get_data_frames()[0]
-            df["SEASON"] = season
-            frames.append(df)
-            time.sleep(1)
-        except Exception as e:
-            print(f"Error with game logs {season}: {e}")
+        for season_type in season_types:
+            print(f"Fetching player game logs for {season} ({season_type})...")
+            try:
+                data = leaguegamelog.LeagueGameLog(
+                    season=season,
+                    season_type_all_star=season_type,
+                    player_or_team_abbreviation="P",
+                )
+                df = data.get_data_frames()[0]
+                df["SEASON"] = season
+                df["SEASON_TYPE"] = season_type
+                frames.append(df)
+                time.sleep(1)
+            except Exception as e:
+                print(f"Error with game logs {season} ({season_type}): {e}")
 
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
+    merged = pd.concat(frames, ignore_index=True)
+    return merged.drop_duplicates(subset=["PLAYER_ID", "GAME_ID"], keep="last")
 
 
 if __name__ == "__main__":

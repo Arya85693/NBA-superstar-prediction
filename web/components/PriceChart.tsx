@@ -12,13 +12,17 @@ import {
   YAxis,
 } from "recharts";
 import { formatUsd } from "@/lib/format";
-import type { PriceRow } from "@/lib/types";
 
-type Pt = { date: string; price: number; gs: number };
+export type ChartPoint = {
+  date: string;
+  price: number;
+  gs: number | null;
+  hadGame: boolean;
+};
 
 function PriceTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
-  const row = payload[0]?.payload as Pt | undefined;
+  const row = payload[0]?.payload as ChartPoint | undefined;
   if (!row) return null;
   return (
     <div
@@ -32,10 +36,17 @@ function PriceTooltip({ active, payload }: TooltipContentProps) {
         {formatUsd(row.price)}{" "}
         <span className="text-xs font-normal text-zinc-500">model price</span>
       </p>
-      <p className="mt-1 font-mono text-sm text-zinc-300">
-        GmSc {row.gs.toFixed(1)}{" "}
-        <span className="text-xs font-normal text-zinc-500">that game</span>
-      </p>
+      {row.hadGame && row.gs != null ? (
+        <p className="mt-1 font-mono text-sm text-zinc-300">
+          GmSc {row.gs.toFixed(1)}{" "}
+          <span className="text-xs font-normal text-zinc-500">that game</span>
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-zinc-400">
+          No game logged{" "}
+          <span className="text-xs font-normal text-zinc-500">price carried forward</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -65,30 +76,23 @@ function formatTooltipDate(iso: string) {
   });
 }
 
-export function PriceChart({ history }: { history: PriceRow[] }) {
-  const data: Pt[] = history.map((h) => ({
-    date: h.game_date,
-    price: h.price_after_game,
-    gs: h.game_score,
-  }));
-
-  if (data.length === 0) {
+export function PriceChart({ points }: { points: ChartPoint[] }) {
+  if (points.length === 0) {
     return <p className="text-zinc-500">No history.</p>;
   }
 
   const h = 320;
-  const showDots = data.length <= 24;
 
   return (
     <div
       className="w-full min-w-0"
       style={{ height: h, minHeight: h }}
       role="img"
-      aria-label="Player model price over time, by game date"
+      aria-label="Player model price over time, carried forward by date"
     >
       <ResponsiveContainer width="100%" height={h} debounce={50}>
         <LineChart
-          data={data}
+          data={points}
           margin={{ top: 16, right: 10, left: 6, bottom: 12 }}
         >
           <defs>
@@ -144,15 +148,11 @@ export function PriceChart({ history }: { history: PriceRow[] }) {
             )}
           />
           <Line
-            type="monotone"
+            type="stepAfter"
             dataKey="price"
             stroke="url(#priceStroke)"
             strokeWidth={2.25}
-            dot={
-              showDots
-                ? { r: 3.5, fill: "#6ee7b7", stroke: "#064e3b", strokeWidth: 1 }
-                : false
-            }
+            dot={false}
             activeDot={{ r: 6, fill: "#a7f3d0", stroke: "#047857", strokeWidth: 2 }}
             isAnimationActive={false}
             name="Model price"

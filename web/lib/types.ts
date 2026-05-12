@@ -23,6 +23,7 @@ export type MarketRow = PriceRow & {
 /** Label for tooltips, e.g. "2025-26" — newest season present in player_game_prices.csv */
 export type MarketMeta = {
   current_dataset_season: string | null;
+  current_dataset_last_game_date?: string | null;
 };
 
 export type Portfolio = {

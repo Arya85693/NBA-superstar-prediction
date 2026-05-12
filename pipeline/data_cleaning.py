@@ -89,6 +89,9 @@ def clean_game_logs() -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.read_csv(path)
 
+    if "SEASON_TYPE" not in df.columns:
+        df["SEASON_TYPE"] = "Regular Season"
+
     cols_to_keep = [
         "PLAYER_ID",
         "PLAYER_NAME",
@@ -97,6 +100,7 @@ def clean_game_logs() -> pd.DataFrame:
         "GAME_ID",
         "GAME_DATE",
         "SEASON",
+        "SEASON_TYPE",
         "MATCHUP",
         "WL",
         "MIN",
@@ -131,6 +135,7 @@ def clean_game_logs() -> pd.DataFrame:
             "GAME_ID": "game_id",
             "GAME_DATE": "game_date",
             "SEASON": "season",
+            "SEASON_TYPE": "season_type",
             "MATCHUP": "matchup",
             "WL": "result",
             "MIN": "minutes",

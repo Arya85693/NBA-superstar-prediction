@@ -27,13 +27,13 @@ const modelSteps = [
   {
     step: "02",
     title: "Live games",
-    body: "As games land in your dataset, performance feeds the model. The price is a smoothed signal — it carries season context, not just the last box score.",
+    body: "As regular-season and playoff games land in your dataset, performance feeds the model. The price is a smoothed signal — it carries season context, not just the last box score.",
     icon: "◇",
   },
   {
     step: "03",
     title: "What you trade",
-    body: "The number you see is the model’s latest quote for that player. It updates with your pipeline’s data, not with real-world order books or news.",
+    body: "The number you see is the model’s latest quote for that player. It updates when that player logs another game and otherwise stays flat until the next one.",
     icon: "○",
   },
 ] as const;
@@ -55,7 +55,7 @@ const screens = [
     accent: "from-sky-500/12 to-transparent",
     bullets: [
       "Ticker, team, last game date, and season label sit up top for orientation.",
-      "Charts compare model price to game score over time — zoom the ranges to see stretches, not just endpoints.",
+      "Charts compare model price to game score over time and carry prices forward between games, so inactive stretches stay visible.",
       "The trade panel buys and sells whole shares at the latest model price.",
     ],
   },
@@ -262,8 +262,8 @@ export default async function HowItWorksPage() {
                   ✓
                 </span>
                 <span>
-                  Remember: both series come from your dataset file — missing rows behave like
-                  missing games.
+                  On days without a game, the chart carries the last model price forward so the line
+                  stays continuous through inactive stretches.
                 </span>
               </li>
             </ul>

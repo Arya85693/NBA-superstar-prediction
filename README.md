@@ -23,6 +23,9 @@ python pipeline/run_pipeline.py --active     # also refresh data/active_players.
 
 Individual steps: `pipeline/data_collection.py` → `pipeline/data_cleaning.py` → `pipeline/game_score.py` → `pipeline/price_engine.py`.
 
+Game-log collection includes both **Regular Season** and **Playoffs**. Prices update only when a
+player logs another game; between games, the last model price stays flat.
+
 ## Data flow
 
 1. **Raw** (`data/raw_*.csv`) — NBA API exports  
@@ -51,6 +54,10 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Local / default:** reads `data/player_game_prices.csv` and `data/active_players.csv` via `../data` from the `web/` folder (see `web/lib/paths.ts`).
 - **Hosted (Vercel, recommended):** load prices from Supabase instead of the repo disk. Run `supabase/prices_tables.sql` once in the SQL Editor, then **`supabase/prices_meta_snapshot.sql`** (adds season snapshot columns), then whenever CSVs change run `python pipeline/sync_prices_to_supabase.py` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set (service key is **secret** — use CI secrets or your shell only). On Vercel add **`PRICES_SOURCE=supabase`** (server env, not `NEXT_PUBLIC_*`). The sync bumps `prices_snapshot_meta.revision` so the app drops its in-memory cache on the next request.
   - Optional: set **`PRICES_SUPABASE_PAGE_SIZE`** (e.g. `5000`) in `web/.env.local` / Vercel to cut round-trips. In Supabase **Project Settings → API**, raise **Max rows** to at least that value, or requests will still cap at the default (often 1000).
+
+**Automatic updates:** `.github/workflows/update-market-prices.yml` reruns the pipeline and syncs
+fresh prices to Supabase every 30 minutes. Add repository secrets `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` before enabling that workflow.
 
 **Portfolio:** stored in **Supabase** (`portfolios` / `positions`; see `supabase/init_paper_market.sql`). Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and **`SUPABASE_SERVICE_ROLE_KEY`** (server-only on Vercel — never `NEXT_PUBLIC_*`) in `web/.env.local`. The app uses the **service role** for portfolio reads/writes so the anon key cannot mutate paper cash or positions. If you previously ran the old init with open anon policies, run **`supabase/lockdown_paper_portfolio.sql`** once after deploying that code. Starting cash: **$100,000** fake dollars.
 

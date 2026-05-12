@@ -479,8 +479,24 @@ export async function getCurrentSeasonPlaySnapshot(): Promise<{
 }
 
 export async function getMarketMeta(): Promise<MarketMeta> {
-  const { maxSeason } = await getCurrentSeasonPlaySnapshot();
-  return { current_dataset_season: maxSeason };
+  const [snapshot, bundle] = await Promise.all([
+    getCurrentSeasonPlaySnapshot(),
+    loadPricesBundle().catch(() => null),
+  ]);
+
+  let lastGameDate: string | null = null;
+  if (bundle) {
+    for (const row of bundle.latest.values()) {
+      if (!lastGameDate || row.game_date > lastGameDate) {
+        lastGameDate = row.game_date;
+      }
+    }
+  }
+
+  return {
+    current_dataset_season: snapshot.maxSeason,
+    current_dataset_last_game_date: lastGameDate,
+  };
 }
 
 export async function playerPlayedCurrentDatasetSeason(

@@ -12,8 +12,7 @@ Player "stock" price from game-level Hollinger game_score.
   - **prior-season average** game_score (reputation anchor),
   - **season-to-date average** game_score (what they’ve actually done *this* year so far).
 
-**Long gaps without games** — Same-season injury/rest pulls paper price toward an inactive band
-before the next logged game (stronger than earlier versions).
+**Between games** — Price remains flat until the player logs another regular-season or playoff game.
 
 Requires: data/cleaned_game_logs_with_game_score.csv
 
@@ -21,7 +20,6 @@ Output: data/player_game_prices.csv
 """
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -65,13 +63,6 @@ MAX_MINUTES_FACTOR = 1.08
 # Prior-season volume curve for IPO ranking & avg mapping (lower MPG ⇒ lower anchor).
 PRIOR_MPG_REF = 32.0
 PRIOR_MPG_EXPONENT = 1.2
-
-# --- Absence (same season) ---
-INACTIVITY_GAP_DAYS = 8
-INACTIVE_PRICE_FRAC = 0.20
-INACTIVE_ANCHOR_PRICE = PRICE_MIN + INACTIVE_PRICE_FRAC * (PRICE_MAX - PRICE_MIN)
-ABSENCE_DECAY_K = 0.32
-MAX_ABSENCE_WEEKS = 24.0
 
 DEFAULT_IPO_PRICE = ROOKIE_IPO_PRICE
 
@@ -212,17 +203,6 @@ def minutes_factor(minutes: float) -> float:
     return max(MIN_MINUTES_FACTOR, min(MAX_MINUTES_FACTOR, r))
 
 
-def decay_price_for_absence(price: float, delta_days: int, season_ipo: float) -> float:
-    if delta_days <= INACTIVITY_GAP_DAYS:
-        return price
-    extra_days = delta_days - INACTIVITY_GAP_DAYS
-    weeks = min(extra_days / 7.0, MAX_ABSENCE_WEEKS)
-    blend_target = 0.72 * INACTIVE_ANCHOR_PRICE + 0.28 * season_ipo
-    shrink = math.exp(-weeks * ABSENCE_DECAY_K)
-    new_price = blend_target + (price - blend_target) * shrink
-    return min(PRICE_CEILING, max(PRICE_FLOOR, new_price))
-
-
 def smoothing_target_live(
     game_score: float,
     minutes: float,
@@ -295,7 +275,6 @@ def compute_prices(
         price = DEFAULT_IPO_PRICE
         ipo_this_season = DEFAULT_IPO_PRICE
         games_in_season = 0
-        prev_game_date: pd.Timestamp | None = None
         season_gs_sum = 0.0
 
         for _, row in g.iterrows():
@@ -304,7 +283,6 @@ def compute_prices(
             pm = row["_prior_mean_gs"]
             prior_val = float(pm) if pd.notna(pm) else None
             mins = float(row["minutes"])
-            gd = pd.Timestamp(row["game_date"])
 
             if current_season != sea:
                 current_season = sea
@@ -312,12 +290,6 @@ def compute_prices(
                 season_gs_sum = 0.0
                 ipo_this_season = ipo_map.get((int(pid), sea), DEFAULT_IPO_PRICE)
                 price = ipo_this_season
-                prev_game_date = None
-
-            if prev_game_date is not None:
-                delta_days = int((gd - prev_game_date).days)
-                if delta_days > INACTIVITY_GAP_DAYS:
-                    price = decay_price_for_absence(price, delta_days, ipo_this_season)
 
             games_in_season += 1
             season_gs_sum += gs
@@ -333,7 +305,6 @@ def compute_prices(
             price = min(PRICE_CEILING, max(PRICE_FLOOR, price))
             prices.append(price)
             ipos_out.append(ipo_this_season)
-            prev_game_date = gd
 
     df["season_open_anchor"] = ipos_out
     df["price_after_game"] = prices

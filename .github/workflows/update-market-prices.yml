@@ -1,0 +1,40 @@
+name: Update Market Prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-market-prices
+  cancel-in-progress: false
+
+jobs:
+  update-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: "1"
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install pipeline dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch NBA data and rebuild prices
+        run: python pipeline/run_pipeline.py --fetch --active
+
+      - name: Sync prices to Supabase
+        run: python pipeline/sync_prices_to_supabase.py

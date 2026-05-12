@@ -174,7 +174,10 @@ export default async function PlayerPage({
           <h2 className="mb-4 mt-10 text-sm font-medium uppercase tracking-wide text-zinc-500">
             Price history
           </h2>
-          <PlayerChartSection history={history} />
+          <PlayerChartSection
+            history={history}
+            marketEndDate={marketMeta.current_dataset_last_game_date}
+          />
         </div>
 
         <div className="w-full shrink-0 lg:w-80 lg:self-start lg:sticky lg:top-20 lg:z-10">
