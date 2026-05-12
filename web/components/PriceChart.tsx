@@ -5,6 +5,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   type TooltipContentProps,
@@ -82,6 +83,7 @@ export function PriceChart({ points }: { points: ChartPoint[] }) {
   }
 
   const h = 320;
+  const allSamePrice = points.every((point) => point.price === points[0]?.price);
 
   return (
     <div
@@ -140,6 +142,14 @@ export function PriceChart({ points }: { points: ChartPoint[] }) {
             cursor={{ stroke: "#52525b", strokeWidth: 1, strokeDasharray: "4 4" }}
             content={PriceTooltip}
           />
+          {allSamePrice && (
+            <ReferenceLine
+              y={points[0]!.price}
+              stroke="#6ee7b7"
+              strokeOpacity={0.35}
+              strokeWidth={1.5}
+            />
+          )}
           <Legend
             wrapperStyle={{ paddingTop: 8, fontSize: 12 }}
             iconType="line"
@@ -148,7 +158,7 @@ export function PriceChart({ points }: { points: ChartPoint[] }) {
             )}
           />
           <Line
-            type="stepAfter"
+            type="linear"
             dataKey="price"
             stroke="url(#priceStroke)"
             strokeWidth={2.25}
@@ -156,6 +166,9 @@ export function PriceChart({ points }: { points: ChartPoint[] }) {
             activeDot={{ r: 6, fill: "#a7f3d0", stroke: "#047857", strokeWidth: 2 }}
             isAnimationActive={false}
             name="Model price"
+            connectNulls
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         </LineChart>
       </ResponsiveContainer>
