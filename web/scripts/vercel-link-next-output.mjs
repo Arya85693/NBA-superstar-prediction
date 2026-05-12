@@ -10,24 +10,50 @@ if (!process.env.VERCEL) {
   process.exit(0);
 }
 
-const appNextDir = path.resolve(".next");
-const repoNextDir = path.resolve("..", ".next");
+const appRootDir = path.resolve(".");
+const repoRootDir = path.resolve("..");
+const entriesToMirror = [
+  ".next",
+  "node_modules",
+  "package.json",
+  "package-lock.json",
+  "next.config.ts",
+  "proxy.ts",
+  "app",
+  "components",
+  "hooks",
+  "lib",
+  "public",
+];
 
-if (!fs.existsSync(appNextDir)) {
+if (!fs.existsSync(path.join(appRootDir, ".next"))) {
   console.warn("Vercel workaround skipped: local .next directory was not found.");
   process.exit(0);
 }
 
-try {
-  if (fs.existsSync(repoNextDir)) {
-    fs.rmSync(repoNextDir, { recursive: true, force: true });
+for (const entry of entriesToMirror) {
+  const source = path.join(appRootDir, entry);
+  const target = path.join(repoRootDir, entry);
+
+  if (!fs.existsSync(source)) {
+    continue;
   }
 
   try {
-    fs.symlinkSync(appNextDir, repoNextDir, "dir");
-  } catch {
-    fs.cpSync(appNextDir, repoNextDir, { recursive: true });
+    if (fs.existsSync(target)) {
+      fs.rmSync(target, { recursive: true, force: true });
+    }
+
+    try {
+      fs.symlinkSync(
+        source,
+        target,
+        fs.lstatSync(source).isDirectory() ? "dir" : "file",
+      );
+    } catch {
+      fs.cpSync(source, target, { recursive: true });
+    }
+  } catch (error) {
+    console.warn(`Vercel workaround could not mirror ${entry} to repo root:`, error);
   }
-} catch (error) {
-  console.warn("Vercel workaround could not mirror .next to repo root:", error);
 }
