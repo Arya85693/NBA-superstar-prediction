@@ -24,6 +24,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const confirmedEmail = searchParams.get("confirmed") === "1";
+  const passwordReset = searchParams.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -100,6 +101,12 @@ function LoginForm() {
         </div>
       )}
 
+      {passwordReset && (
+        <div className="mb-6 rounded-xl border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm leading-relaxed text-emerald-200/95">
+          Your password was updated. Please sign in with your new password.
+        </div>
+      )}
+
       <form
         onSubmit={(e) => void onSubmit(e)}
         className="space-y-4 rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-6 shadow-sm shadow-black/20"
@@ -134,6 +141,14 @@ function LoginForm() {
             className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2"
             placeholder="••••••••"
           />
+          <div className="mt-2 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-xs font-medium text-emerald-400/90 underline-offset-4 hover:text-emerald-300 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
 
         {errorMessage && (
