@@ -17,7 +17,8 @@ Simulated player “stocks” driven by game logs, Hollinger game score, and a p
 ```bash
 pip install -r requirements.txt
 python pipeline/run_pipeline.py              # build from existing raw CSVs
-python pipeline/run_pipeline.py --fetch      # re-download from NBA API, then build
+python pipeline/run_pipeline.py --fetch      # refresh prior + current season, then build
+python pipeline/run_pipeline.py --fetch --bootstrap-history
 python pipeline/run_pipeline.py --active     # also refresh data/active_players.csv
 ```
 
@@ -25,6 +26,10 @@ Individual steps: `pipeline/data_collection.py` → `pipeline/data_cleaning.py` 
 
 Game-log collection includes both **Regular Season** and **Playoffs**. Prices update only when a
 player logs another game; between games, the last model price stays flat.
+
+**Long-term updater defaults:** automated fetches use only the **prior season + current season**
+because the prior season provides the benchmark/anchor and the current season drives the live
+market. Use `--bootstrap-history` only when you intentionally want a deeper rebuild.
 
 ## Data flow
 
@@ -55,9 +60,20 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Hosted (Vercel, recommended):** load prices from Supabase instead of the repo disk. Run `supabase/prices_tables.sql` once in the SQL Editor, then **`supabase/prices_meta_snapshot.sql`** (adds season snapshot columns), then whenever CSVs change run `python pipeline/sync_prices_to_supabase.py` with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set (service key is **secret** — use CI secrets or your shell only). On Vercel add **`PRICES_SOURCE=supabase`** (server env, not `NEXT_PUBLIC_*`). The sync bumps `prices_snapshot_meta.revision` so the app drops its in-memory cache on the next request.
   - Optional: set **`PRICES_SUPABASE_PAGE_SIZE`** (e.g. `5000`) in `web/.env.local` / Vercel to cut round-trips. In Supabase **Project Settings → API**, raise **Max rows** to at least that value, or requests will still cap at the default (often 1000).
 
-**Automatic updates:** `.github/workflows/update-market-prices.yml` reruns the pipeline and syncs
-fresh prices to Supabase every 30 minutes. Add repository secrets `SUPABASE_URL` and
+**Automatic updates:** `.github/workflows/update-market-prices.yml` reruns the lighter fetch window
+and syncs fresh prices to Supabase every 30 minutes. Add repository secrets `SUPABASE_URL` and
 `SUPABASE_SERVICE_ROLE_KEY` before enabling that workflow.
+
+**Recommended fallback / long-term reliability:** if `stats.nba.com` times out from GitHub-hosted
+runners, schedule this locally instead:
+
+```bash
+python pipeline/update_market_local.py
+```
+
+That script loads Supabase values from `web/.env.local` when present, refreshes the prior/current
+season window, rebuilds prices, and syncs them to Supabase. On Windows, this is a good target for
+Task Scheduler.
 
 **Portfolio:** stored in **Supabase** (`portfolios` / `positions`; see `supabase/init_paper_market.sql`). Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and **`SUPABASE_SERVICE_ROLE_KEY`** (server-only on Vercel — never `NEXT_PUBLIC_*`) in `web/.env.local`. The app uses the **service role** for portfolio reads/writes so the anon key cannot mutate paper cash or positions. If you previously ran the old init with open anon policies, run **`supabase/lockdown_paper_portfolio.sql`** once after deploying that code. Starting cash: **$100,000** fake dollars.
 

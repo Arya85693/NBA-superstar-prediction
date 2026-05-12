@@ -33,6 +33,29 @@ ACTIVE_CSV = REPO_ROOT / "data" / "active_players.csv"
 BATCH = 1000
 
 
+def _load_env_file(path: Path) -> None:
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        os.environ.setdefault(key, value.strip())
+
+
+def _load_supabase_env_fallbacks() -> None:
+    _load_env_file(REPO_ROOT / "web" / ".env.local")
+
+    if not os.environ.get("SUPABASE_URL"):
+        public_url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
+        if public_url:
+            os.environ["SUPABASE_URL"] = public_url
+
+
 def _row_from_prices_csv(row: dict[str, str]) -> dict:
     def fnum(key: str, default: str = "0") -> float:
         v = (row.get(key) or default).strip()
@@ -67,11 +90,12 @@ def _row_from_prices_csv(row: dict[str, str]) -> dict:
 
 
 def main() -> None:
+    _load_supabase_env_fallbacks()
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
         print(
-            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment.",
+            "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment or web/.env.local.",
             file=sys.stderr,
         )
         sys.exit(1)

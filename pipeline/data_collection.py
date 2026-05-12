@@ -5,25 +5,74 @@ Writes two datasets under data/:
   - raw_season_player_stats.csv — league per-season aggregates (LeagueDashPlayerStats)
   - raw_game_logs.csv — every player-game row for pricing after each game (LeagueGameLog, player scope)
 """
+from __future__ import annotations
+
+import os
+import time
+from datetime import date
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
-import time
 from nba_api.stats.endpoints import leaguedashplayerstats, leaguegamelog
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 
-# Season id "2025-26" is requested with start year 2025. Bump DEFAULT_END_SEASON_START_YEAR
-# each off-season so pulls stay current for a live-style pipeline.
-# Default range (2018→present): ~8 seasons — enough for rolling stats / volatility without pre-modern
-# NBA style or excessive API time; override collect_*(..., start_year=...) if you need deeper history.
-DEFAULT_START_SEASON_START_YEAR = 2018
-DEFAULT_END_SEASON_START_YEAR = 2025  # includes 2024-25, 2025-26 at current defaults
+# Default scheduled fetch window = current season + prior season.
+# Historical bootstrap remains available explicitly via run_pipeline.py --bootstrap-history.
+DEFAULT_BOOTSTRAP_START_SEASON_START_YEAR = 2018
+
+NBA_API_TIMEOUT_SECONDS = int(os.environ.get("NBA_API_TIMEOUT_SECONDS", "90"))
+NBA_API_MAX_ATTEMPTS = int(os.environ.get("NBA_API_MAX_ATTEMPTS", "3"))
+NBA_API_REQUEST_PAUSE_SECONDS = float(os.environ.get("NBA_API_REQUEST_PAUSE_SECONDS", "1"))
+NBA_API_RETRY_BACKOFF_SECONDS = float(os.environ.get("NBA_API_RETRY_BACKOFF_SECONDS", "5"))
 
 
 def _season_string(start_year: int) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
+
+
+def inferred_current_season_start_year(today: date | None = None) -> int:
+    """
+    NBA seasons usually roll in September/October and finish the following June.
+    July/August still belong to the most recently completed season for update purposes.
+    """
+    now = today or date.today()
+    return now.year if now.month >= 9 else now.year - 1
+
+
+def automated_window_season_years(today: date | None = None) -> tuple[int, int]:
+    current = inferred_current_season_start_year(today)
+    return current - 1, current
+
+
+DEFAULT_START_SEASON_START_YEAR, DEFAULT_END_SEASON_START_YEAR = automated_window_season_years()
+
+
+def describe_season_window(start_year: int, end_year: int) -> str:
+    return ", ".join(_season_string(year) for year in range(start_year, end_year + 1))
+
+
+def _fetch_with_retries(
+    label: str,
+    factory: Callable[[int], pd.DataFrame],
+) -> pd.DataFrame | None:
+    for attempt in range(1, NBA_API_MAX_ATTEMPTS + 1):
+        try:
+            df = factory(NBA_API_TIMEOUT_SECONDS)
+            print(f"Fetched {label}: {df.shape}")
+            time.sleep(NBA_API_REQUEST_PAUSE_SECONDS)
+            return df
+        except Exception as e:
+            print(
+                f"Error with {label} (attempt {attempt}/{NBA_API_MAX_ATTEMPTS}): {e}",
+            )
+            if attempt < NBA_API_MAX_ATTEMPTS:
+                sleep_s = NBA_API_RETRY_BACKOFF_SECONDS * attempt
+                print(f"Retrying {label} in {sleep_s:.0f}s...")
+                time.sleep(sleep_s)
+    return None
 
 
 def collect_season_player_stats(
@@ -35,17 +84,18 @@ def collect_season_player_stats(
     for year in range(start_year, end_year + 1):
         season = _season_string(year)
         print(f"Fetching season player stats for {season}...")
-        try:
-            data = leaguedashplayerstats.LeagueDashPlayerStats(
+        df = _fetch_with_retries(
+            f"season player stats {season}",
+            lambda timeout: leaguedashplayerstats.LeagueDashPlayerStats(
                 season=season,
                 per_mode_detailed="PerGame",
-            )
-            df = data.get_data_frames()[0]
-            df["SEASON"] = season
-            frames.append(df)
-            time.sleep(1)
-        except Exception as e:
-            print(f"Error with season player stats {season}: {e}")
+                timeout=timeout,
+            ).get_data_frames()[0],
+        )
+        if df is None or df.empty:
+            continue
+        df["SEASON"] = season
+        frames.append(df)
 
     if not frames:
         return pd.DataFrame()
@@ -63,28 +113,39 @@ def collect_player_game_logs(
         season = _season_string(year)
         for season_type in season_types:
             print(f"Fetching player game logs for {season} ({season_type})...")
-            try:
-                data = leaguegamelog.LeagueGameLog(
+            df = _fetch_with_retries(
+                f"game logs {season} ({season_type})",
+                lambda timeout: leaguegamelog.LeagueGameLog(
                     season=season,
                     season_type_all_star=season_type,
                     player_or_team_abbreviation="P",
-                )
-                df = data.get_data_frames()[0]
-                df["SEASON"] = season
-                df["SEASON_TYPE"] = season_type
-                frames.append(df)
-                time.sleep(1)
-            except Exception as e:
-                print(f"Error with game logs {season} ({season_type}): {e}")
+                    timeout=timeout,
+                ).get_data_frames()[0],
+            )
+            if df is None or df.empty:
+                continue
+            df["SEASON"] = season
+            df["SEASON_TYPE"] = season_type
+            frames.append(df)
 
     if not frames:
         return pd.DataFrame()
     merged = pd.concat(frames, ignore_index=True)
-    return merged.drop_duplicates(subset=["PLAYER_ID", "GAME_ID"], keep="last")
+    return merged.drop_duplicates(
+        subset=["PLAYER_ID", "GAME_ID", "SEASON_TYPE"],
+        keep="last",
+    )
 
 
 if __name__ == "__main__":
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    print(
+        "Default fetch window:",
+        describe_season_window(
+            DEFAULT_START_SEASON_START_YEAR,
+            DEFAULT_END_SEASON_START_YEAR,
+        ),
+    )
 
     season_df = collect_season_player_stats()
     out_season = DATA_DIR / "raw_season_player_stats.csv"

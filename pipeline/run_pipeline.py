@@ -2,7 +2,8 @@
 Run the NBA stock pipeline in the correct order (from repo root):
 
   python pipeline/run_pipeline.py              # use existing raw CSVs
-  python pipeline/run_pipeline.py --fetch      # re-download raw from NBA API, then build
+  python pipeline/run_pipeline.py --fetch      # refresh prior + current season, then build
+  python pipeline/run_pipeline.py --fetch --bootstrap-history
   python pipeline/run_pipeline.py --active     # also refresh data/active_players.csv
 
 Steps: raw (optional) -> data_cleaning -> game_score -> price_engine + validate_prices.
@@ -21,12 +22,27 @@ def main() -> None:
     parser.add_argument(
         "--fetch",
         action="store_true",
-        help="Re-download raw_season_player_stats.csv and raw_game_logs.csv (nba_api, slow).",
+        help="Re-download raw season/game data from nba_api before rebuilding prices.",
     )
     parser.add_argument(
         "--active",
         action="store_true",
         help="After prices, refresh data/active_players.csv (current NBA player list).",
+    )
+    parser.add_argument(
+        "--start-year",
+        type=int,
+        help="First season start year to fetch (e.g. 2024 for 2024-25).",
+    )
+    parser.add_argument(
+        "--end-year",
+        type=int,
+        help="Last season start year to fetch (e.g. 2025 for 2025-26).",
+    )
+    parser.add_argument(
+        "--bootstrap-history",
+        action="store_true",
+        help="Fetch the full historical window instead of the lighter prior+current-season window.",
     )
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
@@ -34,15 +50,33 @@ def main() -> None:
     if args.fetch:
         import data_collection as dc
 
+        if args.start_year is None and args.end_year is None:
+            if args.bootstrap_history:
+                start_year = dc.DEFAULT_BOOTSTRAP_START_SEASON_START_YEAR
+                end_year = dc.inferred_current_season_start_year()
+            else:
+                start_year, end_year = dc.automated_window_season_years()
+        elif args.start_year is None or args.end_year is None:
+            parser.error("--start-year and --end-year must be provided together.")
+        else:
+            start_year, end_year = args.start_year, args.end_year
+
+        if start_year > end_year:
+            parser.error("--start-year must be <= --end-year.")
+
         dc.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        print(
+            "Fetch window:",
+            dc.describe_season_window(start_year, end_year),
+        )
         print("Fetching raw season player stats...")
-        season_df = dc.collect_season_player_stats()
+        season_df = dc.collect_season_player_stats(start_year=start_year, end_year=end_year)
         out_season = dc.DATA_DIR / "raw_season_player_stats.csv"
         season_df.to_csv(out_season, index=False)
         print(f"Saved {season_df.shape} -> {out_season.relative_to(root)}")
 
         print("Fetching raw game logs...")
-        games_df = dc.collect_player_game_logs()
+        games_df = dc.collect_player_game_logs(start_year=start_year, end_year=end_year)
         out_games = dc.DATA_DIR / "raw_game_logs.csv"
         games_df.to_csv(out_games, index=False)
         print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
