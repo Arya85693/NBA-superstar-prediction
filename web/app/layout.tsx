@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: "%s · Hoops Stock Market",
   },
   description:
-    "Simulated NBA player market with paper trading — model-driven prices from your pipeline.",
+    "Simulated basketball player market with paper trading and model-driven prices from your pipeline.",
 };
 
 export default function RootLayout({

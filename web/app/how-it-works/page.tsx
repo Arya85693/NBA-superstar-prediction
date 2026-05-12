@@ -103,7 +103,7 @@ export default async function HowItWorksPage() {
       <PageHeader
         eyebrow="Guide"
         title="How it works"
-        description="A practical map of the simulator: how prices are built, what each screen is for, and how paper trading fits in. This is education about the app — not financial advice, and not real securities."
+        description="A practical map of the simulator: how prices are built, what each screen is for, and how simulated trading fits in. This is education about the app — not financial advice, and not real securities."
       />
 
       {/* Quick jump */}

@@ -35,7 +35,7 @@ export default async function PortfolioPage() {
       <PageHeader
         eyebrow="Account"
         title="Portfolio"
-        description="Paper account starting at $100,000. Holdings are valued at the latest model price — same as a brokerage statement’s market value (not purchase history)."
+        description="Starter account funded with $100,000. Holdings are valued at the latest model price — similar to a brokerage statement’s market value view (not purchase history)."
       />
 
       <div className="mb-8 grid gap-4 md:grid-cols-2">

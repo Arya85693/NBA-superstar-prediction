@@ -15,14 +15,14 @@ export function LandingHero() {
           Paper trading · Model prices
         </p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-50 md:text-5xl lg:text-6xl">
-          Trade NBA players like{" "}
+          Trade hoop stars like{" "}
           <span className="bg-gradient-to-r from-emerald-300 to-teal-400 bg-clip-text text-transparent">
             stocks
           </span>
         </h1>
         <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-zinc-400">
           A simulated market powered by your pipeline — season anchors, game-by-game updates,
-          and a paper portfolio so you can explore the model without real money.
+          and a starter portfolio so you can explore the model without real money.
         </p>
         <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
           <Link

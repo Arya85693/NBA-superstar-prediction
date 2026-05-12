@@ -28,7 +28,7 @@ export default async function MarketPage() {
       <PageHeader
         eyebrow="Live board"
         title="Player market"
-        description="Search and sort the board. Each row shows model price (2 decimals), team, last game, and change vs the prior game in your file. Click a row or Open for charts and paper trading."
+        description="Search and sort the board. Each row shows model price (2 decimals), team, last game, and change vs the prior game in your file. Click a row or Open for charts and simulated trading."
       />
       {meta?.current_dataset_season && (
         <div className="mb-6 rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-200/90">
