@@ -29,6 +29,7 @@ const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
 export function Nav() {
   const path = usePathname();
   const router = useRouter();
+  const isAuthPage = path === "/login" || path === "/signup";
   const [pf, setPf] = useState<Pf | null>(null);
   const [portfolioFetch, setPortfolioFetch] = useState<PortfolioFetch>("loading");
   const [account, setAccount] = useState<
@@ -118,28 +119,30 @@ export function Nav() {
           >
             <span className="text-zinc-400">Hoops</span> Stock Market
           </Link>
-          <nav
-            className="flex flex-wrap items-end gap-1 sm:gap-6"
-            aria-label="Main"
-          >
-            {tabs.map((t) => {
-              const active = t.match(path);
-              return (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  prefetch
-                  className={
-                    active
-                      ? "-mb-px border-b-2 border-emerald-500 px-2 pb-3 text-sm font-medium text-zinc-100"
-                      : "border-b-2 border-transparent px-2 pb-3 text-sm font-medium text-zinc-500 transition hover:text-zinc-300"
-                  }
-                >
-                  {t.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {!isAuthPage && (
+            <nav
+              className="flex flex-wrap items-end gap-1 sm:gap-6"
+              aria-label="Main"
+            >
+              {tabs.map((t) => {
+                const active = t.match(path);
+                return (
+                  <Link
+                    key={t.href}
+                    href={t.href}
+                    prefetch
+                    className={
+                      active
+                        ? "-mb-px border-b-2 border-emerald-500 px-2 pb-3 text-sm font-medium text-zinc-100"
+                        : "border-b-2 border-transparent px-2 pb-3 text-sm font-medium text-zinc-500 transition hover:text-zinc-300"
+                    }
+                  >
+                    {t.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-4 gap-y-2 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
           <div className="flex items-center gap-2">

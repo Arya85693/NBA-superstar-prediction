@@ -169,8 +169,7 @@ function LoginForm() {
               setLoading(true);
               try {
                 await fetch("/api/auth/guest", { method: "POST" });
-                router.refresh();
-                router.push("/");
+                window.location.assign("/");
               } finally {
                 setLoading(false);
               }
