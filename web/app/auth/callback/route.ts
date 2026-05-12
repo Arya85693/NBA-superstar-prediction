@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -25,12 +26,16 @@ function destinationUrl(
 
 /** Default: land on sign-in with banner after confirming email (must stay sign-in first). */
 const DEFAULT_AFTER_AUTH = "/login?confirmed=1";
+const DEFAULT_AFTER_RECOVERY = "/reset-password";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const tokenHash = requestUrl.searchParams.get("token_hash");
+  const type = requestUrl.searchParams.get("type") as EmailOtpType | null;
   const nextRaw =
-    requestUrl.searchParams.get("next") ?? DEFAULT_AFTER_AUTH;
+    requestUrl.searchParams.get("next") ??
+    (type === "recovery" ? DEFAULT_AFTER_RECOVERY : DEFAULT_AFTER_AUTH);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -38,7 +43,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${requestUrl.origin}/auth/auth-code-error`);
   }
 
-  if (!code) {
+  if (!code && !(tokenHash && type)) {
     return NextResponse.redirect(`${requestUrl.origin}/auth/auth-code-error`);
   }
 
@@ -66,13 +71,17 @@ export async function GET(request: Request) {
     },
   });
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { error } = code
+    ? await supabase.auth.exchangeCodeForSession(code)
+    : await supabase.auth.verifyOtp({ token_hash: tokenHash!, type: type! });
   if (error) {
     return NextResponse.redirect(`${requestUrl.origin}/auth/auth-code-error`);
   }
 
-  /** Require password sign-in after confirmation: verify email, then clear magic-link session. */
-  await supabase.auth.signOut();
+  if (type !== "recovery") {
+    /** Require password sign-in after confirmation: verify email, then clear magic-link session. */
+    await supabase.auth.signOut();
+  }
 
   /** Avoid landing on `/` as guest demo while we ask them to sign in. */
   redirectResponse.cookies.set(GUEST_BROWSE_COOKIE, "", {

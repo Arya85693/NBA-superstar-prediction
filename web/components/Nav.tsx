@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { formatUsd } from "@/lib/format";
+import { GUEST_BROWSE_CLEAR_PATH } from "@/lib/guestBrowse";
 import { createSupabaseSessionBrowser } from "@/lib/supabase-session-browser";
 
 type Pf = { cash: number; total: number };
@@ -29,7 +30,12 @@ const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
 export function Nav() {
   const path = usePathname();
   const router = useRouter();
-  const isAuthPage = path === "/login" || path === "/signup";
+  const isAuthPage =
+    path === "/login" ||
+    path === "/signup" ||
+    path === "/forgot-password" ||
+    path === "/reset-password" ||
+    path === "/auth/auth-code-error";
   const [pf, setPf] = useState<Pf | null>(null);
   const [portfolioFetch, setPortfolioFetch] = useState<PortfolioFetch>("loading");
   const [account, setAccount] = useState<
@@ -54,6 +60,32 @@ export function Nav() {
       alive = false;
     };
   }, [path]);
+
+  useEffect(() => {
+    if (isAuthPage || account !== null) return;
+
+    const clearGuestCookie = () => {
+      if (typeof navigator.sendBeacon === "function") {
+        navigator.sendBeacon(
+          GUEST_BROWSE_CLEAR_PATH,
+          new Blob([], { type: "application/octet-stream" }),
+        );
+      } else {
+        void fetch(GUEST_BROWSE_CLEAR_PATH, {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+        }).catch(() => {
+          /* best effort cleanup when guest tab closes */
+        });
+      }
+    };
+
+    window.addEventListener("pagehide", clearGuestCookie);
+    return () => {
+      window.removeEventListener("pagehide", clearGuestCookie);
+    };
+  }, [account, isAuthPage]);
 
   useEffect(() => {
     let alive = true;
