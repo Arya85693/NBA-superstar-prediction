@@ -5,6 +5,9 @@ Recommended for local scheduling (Windows Task Scheduler / cron) because `stats.
 can be unreliable from cloud runners. This refreshes the prior + current NBA seasons,
 rebuilds prices, and syncs them to Supabase using values from `web/.env.local` when
 present.
+
+Set `PRICES_FETCH_SOURCE=balldontlie` (and `BALLDONTLIE_API_KEY` in the environment or
+`.env.local`) to use BALLDONTLIE instead of `--fetch` (nba_api).
 """
 from __future__ import annotations
 
@@ -39,9 +42,14 @@ def main() -> None:
             os.environ["SUPABASE_URL"] = public_url
 
     env = os.environ.copy()
+    fetch_args = (
+        ["--fetch-balldontlie", "--active"]
+        if (env.get("PRICES_FETCH_SOURCE") or "").strip().lower() == "balldontlie"
+        else ["--fetch", "--active"]
+    )
 
     subprocess.run(
-        [sys.executable, "pipeline/run_pipeline.py", "--fetch", "--active"],
+        [sys.executable, "pipeline/run_pipeline.py", *fetch_args],
         cwd=REPO_ROOT,
         env=env,
         check=True,

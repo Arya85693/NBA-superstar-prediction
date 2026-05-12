@@ -2,9 +2,11 @@
 Run the NBA stock pipeline in the correct order (from repo root):
 
   python pipeline/run_pipeline.py              # use existing raw CSVs
-  python pipeline/run_pipeline.py --fetch      # refresh prior + current season, then build
+  python pipeline/run_pipeline.py --fetch      # refresh prior + current season (nba_api), then build
+  python pipeline/run_pipeline.py --fetch-balldontlie  # game logs (BALLDONTLIE_API_KEY; add --active for BDL ids)
+  python pipeline/run_pipeline.py --fetch-balldontlie --active  # recommended: BDL game logs + BDL active list
   python pipeline/run_pipeline.py --fetch --bootstrap-history
-  python pipeline/run_pipeline.py --active     # also refresh data/active_players.csv
+  python pipeline/run_pipeline.py --active     # refresh active_players (nba static, or BDL if combined with --fetch-balldontlie)
 
 Steps: raw (optional) -> data_cleaning -> game_score -> price_engine + validate_prices.
 """
@@ -19,10 +21,19 @@ import pandas as pd
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run cleaning through prices in order.")
-    parser.add_argument(
+    fetch_group = parser.add_mutually_exclusive_group()
+    fetch_group.add_argument(
         "--fetch",
         action="store_true",
         help="Re-download raw season/game data from nba_api before rebuilding prices.",
+    )
+    fetch_group.add_argument(
+        "--fetch-balldontlie",
+        action="store_true",
+        help=(
+            "Re-download raw_game_logs.csv from BALLDONTLIE (All-Star+). "
+            "Set BALLDONTLIE_API_KEY. Player/team/game ids are BDL ids, not stats.nba.com."
+        ),
     )
     parser.add_argument(
         "--active",
@@ -47,7 +58,7 @@ def main() -> None:
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
 
-    if args.fetch:
+    if args.fetch or args.fetch_balldontlie:
         import data_collection as dc
 
         if args.start_year is None and args.end_year is None:
@@ -69,17 +80,27 @@ def main() -> None:
             "Fetch window:",
             dc.describe_season_window(start_year, end_year),
         )
-        print("Fetching raw season player stats...")
-        season_df = dc.collect_season_player_stats(start_year=start_year, end_year=end_year)
-        out_season = dc.DATA_DIR / "raw_season_player_stats.csv"
-        season_df.to_csv(out_season, index=False)
-        print(f"Saved {season_df.shape} -> {out_season.relative_to(root)}")
 
-        print("Fetching raw game logs...")
-        games_df = dc.collect_player_game_logs(start_year=start_year, end_year=end_year)
-        out_games = dc.DATA_DIR / "raw_game_logs.csv"
-        games_df.to_csv(out_games, index=False)
-        print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
+        if args.fetch_balldontlie:
+            import balldontlie_fetch as bdl
+
+            print("Fetching raw game logs (BALLDONTLIE)…")
+            games_df = bdl.collect_player_game_logs(start_year=start_year, end_year=end_year)
+            out_games = dc.DATA_DIR / "raw_game_logs.csv"
+            games_df.to_csv(out_games, index=False)
+            print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
+        else:
+            print("Fetching raw season player stats...")
+            season_df = dc.collect_season_player_stats(start_year=start_year, end_year=end_year)
+            out_season = dc.DATA_DIR / "raw_season_player_stats.csv"
+            season_df.to_csv(out_season, index=False)
+            print(f"Saved {season_df.shape} -> {out_season.relative_to(root)}")
+
+            print("Fetching raw game logs...")
+            games_df = dc.collect_player_game_logs(start_year=start_year, end_year=end_year)
+            out_games = dc.DATA_DIR / "raw_game_logs.csv"
+            games_df.to_csv(out_games, index=False)
+            print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
 
     import data_cleaning
 
@@ -110,10 +131,21 @@ def main() -> None:
     if not run_validation(out_df["price_after_game"], csv_path=pe.OUTPUT_CSV):
         sys.exit(1)
 
-    if args.active:
-        import active_players
+    if args.fetch_balldontlie and not args.active:
+        print(
+            "Note: active_players.csv was not refreshed. For BALLDONTLIE ids, use "
+            "`--fetch-balldontlie --active` so the tradable list matches BDL player_id.",
+        )
 
-        active_players.save_active_players()
+    if args.active:
+        if args.fetch_balldontlie:
+            import balldontlie_fetch as bdl
+
+            bdl.save_active_players_bdl()
+        else:
+            import active_players
+
+            active_players.save_active_players()
 
     print("Pipeline finished OK.")
 
