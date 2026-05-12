@@ -142,7 +142,7 @@ export function Nav() {
           </nav>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-4 gap-y-2 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2">
             {account === undefined && (
               <span className="text-zinc-600" aria-hidden>
                 …
@@ -151,7 +151,7 @@ export function Nav() {
             {account === null && (
               <Link
                 href="/login"
-                className="font-medium text-emerald-400/90 transition hover:text-emerald-300"
+                className="px-2 text-sm font-medium text-emerald-400/90 transition hover:text-emerald-300"
               >
                 Log in
               </Link>
@@ -159,14 +159,14 @@ export function Nav() {
             {account && (
               <>
                 <span
-                  className="hidden max-w-[10rem] truncate text-zinc-500 sm:inline"
+                  className="hidden max-w-[10rem] truncate text-xs text-zinc-500 sm:inline"
                   title={account.email ?? undefined}
                 >
                   {account.email ?? "Signed in"}
                 </span>
                 <button
                   type="button"
-                  className="font-medium text-zinc-400 transition hover:text-rose-400"
+                  className="px-2 text-sm font-medium text-zinc-500 transition hover:text-rose-400"
                   onClick={() => {
                     void (async () => {
                       const supabase = createSupabaseSessionBrowser();
