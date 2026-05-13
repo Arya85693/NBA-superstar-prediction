@@ -3,9 +3,9 @@ name: Update Market Prices
 on:
   workflow_dispatch:
   schedule:
-    # Avoid :00/:30 UTC (GitHub warns load spikes at the start of each hour can delay or drop queued schedules).
+    # Twice per hour at :15 and :45 UTC (avoids :00 UTC, where GitHub warns load can delay/drop schedules).
+    # Omit `timezone:` so older GitHub versions still accept the workflow; see events docs for timezone-aware cron.
     - cron: "15,45 * * * *"
-      timezone: "America/New_York"
 
 permissions:
   contents: read
