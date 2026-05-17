@@ -1,7 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import { createSupabaseSessionBrowser } from "./supabase-session-browser";
-
 function getEnv(): { url: string; anonKey: string } {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -56,12 +54,4 @@ export function createSupabaseServiceRoleClient(): SupabaseClient {
   return createClient(url, key.trim(), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-}
-
-/**
- * Browser: Supabase client with Auth session cookies (@supabase/ssr).
- * Use only from Client Components / client-side code paths.
- */
-export function getSupabaseBrowserClient(): SupabaseClient {
-  return createSupabaseSessionBrowser();
 }

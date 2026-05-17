@@ -20,9 +20,6 @@ jobs:
     timeout-minutes: 45
     env:
       PYTHONUNBUFFERED: "1"
-      NBA_API_TIMEOUT_SECONDS: "90"
-      NBA_API_MAX_ATTEMPTS: "3"
-      NBA_API_RETRY_BACKOFF_SECONDS: "5"
       BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

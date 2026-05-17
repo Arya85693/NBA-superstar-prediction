@@ -26,6 +26,3 @@ Thumbs.db
 
 # Optional: large generated data (uncomment if you do not want CSVs in git)
 # data/*.csv
-
-# Paper-trading state (optional: track in git to persist demo accounts)
-# data/paper_portfolio.json
