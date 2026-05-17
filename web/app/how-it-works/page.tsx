@@ -336,8 +336,9 @@ export default async function HowItWorksPage() {
         </div>
       </section>
 
-      {/* Glossary */}
-      <section id="terms" className="scroll-mt-24 mt-16 md:mt-20">
+      <div className="hs-guide-lower-band -mx-5 px-5 md:-mx-8 md:px-8">
+        {/* Glossary */}
+        <section id="terms" className="scroll-mt-24">
         <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">
           Glossary
         </h2>
@@ -348,17 +349,17 @@ export default async function HowItWorksPage() {
           {glossary.map((g) => (
             <div
               key={g.term}
-              className="rounded-2xl border border-border bg-surface-muted/25 px-5 py-4"
+              className="rounded-2xl border border-border bg-surface px-5 py-4"
             >
               <dt className="font-semibold text-foreground">{g.term}</dt>
               <dd className="mt-2 text-sm leading-relaxed text-muted">{g.def}</dd>
             </div>
           ))}
         </dl>
-      </section>
+        </section>
 
-      {/* Closing disclaimer + CTAs */}
-      <div className="hs-panel-cta mt-16 flex w-full flex-col gap-6 px-7 py-8 md:mt-20 md:flex-row md:items-center md:justify-between md:px-10 md:py-9">
+        {/* Closing disclaimer + CTAs */}
+        <div className="hs-panel-cta mt-16 flex w-full flex-col gap-6 px-7 py-8 md:mt-20 md:flex-row md:items-center md:justify-between md:px-10 md:py-9">
         <p className="max-w-2xl text-sm leading-relaxed text-muted md:pr-6">
           Simulation only - paper currency and model-driven prices. Nothing here is investment
           advice, a prediction of real athletic or financial outcomes, or an offer of securities.
@@ -384,6 +385,7 @@ export default async function HowItWorksPage() {
             Back to home
           </Link>
         </div>
+      </div>
       </div>
     </div>
   );

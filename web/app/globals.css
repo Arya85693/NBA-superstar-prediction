@@ -440,6 +440,27 @@ body {
     }
   }
 
+  /* Guide page: lighter band from glossary through footer CTA */
+  .hs-guide-lower-band {
+    position: relative;
+    z-index: 1;
+    margin-top: 4rem;
+    padding-top: 2.5rem;
+    padding-bottom: 2rem;
+    background-color: #faf8f5;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow:
+      0 -4px 16px rgb(30 42 58 / 0.03),
+      inset 0 1px 0 rgb(255 255 255 / 0.85);
+  }
+
+  @media (min-width: 768px) {
+    .hs-guide-lower-band {
+      margin-top: 5rem;
+      padding-top: 2.75rem;
+    }
+  }
+
   @media (min-width: 768px) {
     .hs-page-section {
       margin-top: 5rem;
