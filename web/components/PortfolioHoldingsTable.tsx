@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
 import { usePortfolioCash } from "@/hooks/usePortfolioCash";
+import { PortfolioEmptyGuide } from "@/components/portfolio/PortfolioEmptyGuide";
 import { formatSignedUsd, pnlTextClass } from "@/lib/portfolioPnl";
 import type { PositionRow } from "@/lib/portfolioView";
 
@@ -65,12 +66,7 @@ export function PortfolioHoldingsTable({
   const empty = useMemo(() => positions.length === 0, [positions.length]);
 
   if (empty) {
-    return (
-      <p className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-muted">
-        No positions yet. Use <strong className="text-muted-foreground">Buy another player</strong>{" "}
-        below or open any player on the market.
-      </p>
-    );
+    return <PortfolioEmptyGuide />;
   }
 
   return (
@@ -116,13 +112,13 @@ export function PortfolioHoldingsTable({
                   <td className="px-3 py-3 text-right font-mono text-muted-foreground">
                     {p.avgCostPerShare != null
                       ? formatUsd(p.avgCostPerShare)
-                      : "—"}
+                      : "-"}
                   </td>
                   <td className="px-3 py-3 text-right font-mono text-muted-foreground">
-                    {p.costBasis != null ? formatUsd(p.costBasis) : "—"}
+                    {p.costBasis != null ? formatUsd(p.costBasis) : "-"}
                   </td>
                   <td className="px-3 py-3 text-right font-mono text-muted-foreground">
-                    {p.price != null ? formatUsd(p.price) : "—"}
+                    {p.price != null ? formatUsd(p.price) : "-"}
                   </td>
                   <td className="px-3 py-3 text-right font-mono">{formatUsd(p.value)}</td>
                   <td
@@ -134,7 +130,7 @@ export function PortfolioHoldingsTable({
                   >
                     {p.unrealizedPnl !== null
                       ? formatSignedUsd(p.unrealizedPnl)
-                      : "—"}
+                      : "-"}
                   </td>
                   <td className="px-3 py-3 text-right text-muted-foreground">
                     {pct(p.allocationPct)}

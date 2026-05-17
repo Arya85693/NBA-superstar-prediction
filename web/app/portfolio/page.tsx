@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/PageHeader";
 
 import { PortfolioHoldingsTable } from "@/components/PortfolioHoldingsTable";
 
+import { WatchlistPanel } from "@/components/portfolio/WatchlistPanel";
+
 import { RecentActivity } from "@/components/RecentActivity";
 
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
@@ -13,6 +15,8 @@ import { SectionHeading } from "@/components/ui/SectionHeading";
 import { formatUsd } from "@/lib/format";
 
 import { formatSignedUsd, pnlTextClass } from "@/lib/portfolioPnl";
+
+import { getMarketMeta } from "@/lib/marketData";
 
 import { getPortfolioSnapshot } from "@/lib/portfolioView";
 
@@ -44,6 +48,8 @@ export default async function PortfolioPage() {
 
   let snap;
 
+  let marketMeta;
+
   try {
 
     const supabase = await createSupabaseSessionServer();
@@ -54,7 +60,10 @@ export default async function PortfolioPage() {
 
     } = await supabase.auth.getUser();
 
-    snap = await getPortfolioSnapshot(user?.id ?? null);
+    [snap, marketMeta] = await Promise.all([
+      getPortfolioSnapshot(user?.id ?? null),
+      getMarketMeta(),
+    ]);
 
   } catch (e) {
 
@@ -76,11 +85,15 @@ export default async function PortfolioPage() {
 
       <PageHeader
 
-        eyebrow="Account"
+        eyebrow="Paper account"
 
         title="Portfolio"
 
-        description="Starter account funded with $100,000. Holdings use latest model prices; cost basis and P&amp;L come from your trade history."
+        description="Starter account funded with $100,000. Holdings mark to the latest model quotes from each refresh cycle; cost basis and P&amp;L come from your trade history. Portfolio values update automatically when new game data is ingested (~30 min cadence)."
+
+        marketMeta={marketMeta}
+
+        showSimulationNote
 
       />
 
@@ -128,7 +141,7 @@ export default async function PortfolioPage() {
 
           valueClassName={returnPositive ? "text-positive" : "text-negative"}
 
-          hint={`Compared to initial ${formatUsd(snap.startingCash)} cash — account-level change since funding.`}
+          hint={`Compared to initial ${formatUsd(snap.startingCash)} cash - account-level change since funding.`}
 
         />
 
@@ -192,7 +205,7 @@ export default async function PortfolioPage() {
 
         <DashboardCard
 
-          label="Stocks (market value)"
+          label="Positions (market value)"
 
           value={formatUsd(snap.positionsValue)}
 
@@ -216,7 +229,7 @@ export default async function PortfolioPage() {
 
             style={{ flexGrow: Math.max(0, snap.equitiesPct), flexBasis: 0 }}
 
-            title="Stocks"
+            title="Positions"
 
           />
 
@@ -234,7 +247,7 @@ export default async function PortfolioPage() {
 
         <p className="mt-3 text-xs text-muted">
 
-          <span className="text-accent">■</span> Stocks{" "}
+          <span className="text-accent">■</span> Positions{" "}
 
           <span className="text-border-strong">■</span> Cash
 
@@ -247,6 +260,20 @@ export default async function PortfolioPage() {
       <SectionHeading
 
         className="mb-5"
+
+        title="Watchlist"
+
+        description="Players you are tracking without a position. Saved on this device - open any row for insights or paper trade."
+
+      />
+
+      <WatchlistPanel />
+
+
+
+      <SectionHeading
+
+        className="mb-5 mt-12"
 
         title="Holdings & trade"
 

@@ -44,12 +44,12 @@ export default function SignupPage() {
       }
 
       setMessage(
-        "Check your inbox — we sent a confirmation link. After you click it, you will land on sign-in and then log in with your password.",
+        "Check your inbox - we sent a confirmation link. After you click it, you will land on sign-in and then log in with your password.",
       );
       setEmail("");
       setPassword("");
     } catch {
-      setMessage("Network error — try again.");
+      setMessage("Network error - try again.");
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ export default function SignupPage() {
           Create account
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          Paper trading only — each account gets its own starter balance once you&apos;ve verified
+          Paper trading only - each account gets its own starter balance once you&apos;ve verified
           your email.
         </p>
       </div>

@@ -1,8 +1,17 @@
 import type { ReactNode } from "react";
 import { MoverRow } from "@/components/dashboard/MoverRow";
+import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
+import { CHANGE_VS_PRIOR_GAME_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketAnalytics } from "@/lib/marketAnalytics";
+import type { MarketMeta } from "@/lib/types";
 
-export function HomeMoversSection({ analytics }: { analytics: MarketAnalytics }) {
+export function HomeMoversSection({
+  analytics,
+  meta,
+}: {
+  analytics: MarketAnalytics;
+  meta: MarketMeta;
+}) {
   const { topGainers, topLosers } = analytics;
 
   return (
@@ -13,11 +22,16 @@ export function HomeMoversSection({ analytics }: { analytics: MarketAnalytics })
           id="home-movers-heading"
           className="mt-2 text-xl font-semibold tracking-tight text-charcoal md:text-2xl"
         >
-          Top movers today
+          Latest movers
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Largest daily moves vs each player&apos;s prior game in the dataset.
+        <p
+          className="mt-2 text-sm text-muted-foreground"
+          title={CHANGE_VS_PRIOR_GAME_TOOLTIP}
+        >
+          Largest repricing moves vs each player&apos;s prior ingested game in the latest
+          cycle.
         </p>
+        <MarketRefreshMeta meta={meta} variant="compact" className="mt-3" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">

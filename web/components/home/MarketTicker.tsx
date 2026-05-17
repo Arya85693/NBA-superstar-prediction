@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatUsdNumberOnly } from "@/lib/format";
 import { formatPct } from "@/lib/marketAnalytics";
 import type { MarketMoverSnapshot } from "@/lib/marketAnalytics";
 
@@ -20,6 +21,9 @@ export function MarketTicker({ movers }: { movers: MarketMoverSnapshot[] }) {
             >
               <span className="font-semibold text-accent">{m.ticker}</span>
               <span className="text-muted-foreground">{m.team_abbr}</span>
+              <span className="tabular-nums text-muted-foreground">
+                ${formatUsdNumberOnly(m.price_after_game)}
+              </span>
               <span
                 className={`font-semibold tabular-nums ${up ? "text-positive" : "text-negative"}`}
               >

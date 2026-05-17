@@ -1,6 +1,8 @@
-import { getMarketMeta, getMarketRows } from "@/lib/marketData";
+import { StartHereGuide } from "@/components/onboarding/StartHereGuide";
 import { MarketTable } from "@/components/MarketTable";
 import { PageHeader } from "@/components/PageHeader";
+import { computeMarketAnalytics } from "@/lib/marketAnalytics";
+import { getMarketMeta, getMarketRows } from "@/lib/marketData";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +13,11 @@ export const metadata = {
 export default async function MarketPage() {
   let rows;
   let meta;
+  let topMover: ReturnType<typeof computeMarketAnalytics>["topGainers"][0] | undefined;
   try {
     [rows, meta] = await Promise.all([getMarketRows(), getMarketMeta()]);
+    const analytics = computeMarketAnalytics(rows);
+    topMover = analytics.topGainers[0];
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to load data";
     return (
@@ -26,10 +31,17 @@ export default async function MarketPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Live board"
+        eyebrow="Rolling market snapshot"
         title="Player market"
-        description="Search and sort the board. Each row shows model price (2 decimals), team, last game, and change vs the prior game in your dataset. Quotes update from regular-season and playoff games. Click a row or Open for charts and simulated trading."
+        description="Search and sort the board. Each row shows model price (2 decimals), team, last ingested game, and change vs that player's prior game row. Quotes refresh automatically on each ingestion cycle (~30 min) when new regular-season or playoff games arrive. Click a row or Open for charts and paper trading."
+        marketMeta={meta}
       />
+      <div className="mb-8">
+        <StartHereGuide
+          topMoverId={topMover?.player_id}
+          topMoverName={topMover?.player_name}
+        />
+      </div>
       {meta?.current_dataset_season && (
         <div className="mb-6 hs-callout-warning text-sm">
           <span className="mr-1.5 text-warning" aria-hidden>

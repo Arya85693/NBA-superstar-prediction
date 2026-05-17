@@ -3,6 +3,7 @@ import Link from "next/link";
 import { formatUsd } from "@/lib/format";
 import type { MarketAnalytics } from "@/lib/marketAnalytics";
 import { formatPct } from "@/lib/marketAnalytics";
+import { BOARD_TOTAL_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketMeta } from "@/lib/types";
 import { BreadthPanel } from "./BreadthPanel";
 import { DashboardCard } from "./DashboardCard";
@@ -31,16 +32,16 @@ export function MarketIntelligenceDashboard({
       {/* Header */}
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between md:gap-10">
         <div className="max-w-2xl">
-          <p className="hs-eyebrow">Market intelligence</p>
+          <p className="hs-eyebrow">Market pulse</p>
           <h2
             id="market-intel-heading"
             className="hs-page-title mt-3 md:text-4xl"
           >
-            Live board pulse
+            Rolling snapshot overview
           </h2>
           <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-            Aggregated from the same model prices as the full market — daily move vs each
-            player&apos;s prior game in the dataset.
+            Aggregated from the same automated model quotes as the full board - move vs each
+            player&apos;s prior ingested game in the latest cycle.
           </p>
         </div>
         <Link
@@ -62,9 +63,10 @@ export function MarketIntelligenceDashboard({
         <div className="grid gap-5 lg:grid-cols-2">
           <DashboardCard
             variant="featured"
-            label="Index cap"
+            label="Board total"
+            labelTitle={BOARD_TOTAL_TOOLTIP}
             value={formatUsd(pulse.totalMarketCap)}
-            hint="Sum of latest model prices across active listings."
+            hint="Sum of latest model quotes across tracked players."
           />
           <DashboardCard
             variant="featured"
@@ -78,13 +80,13 @@ export function MarketIntelligenceDashboard({
           <DashboardCard
             label="Advancers"
             value={formatPct(pulse.gainersPct, { signed: false })}
-            hint="Share of players with a positive daily move."
+            hint="Share of players with a positive move vs prior ingested game."
             valueClassName="text-positive"
           />
           <DashboardCard
             label="Decliners"
             value={formatPct(pulse.losersPct, { signed: false })}
-            hint="Share of players with a negative daily move."
+            hint="Share of players with a negative move vs prior ingested game."
             valueClassName="text-negative"
           />
           <DashboardCard
@@ -103,7 +105,7 @@ export function MarketIntelligenceDashboard({
                   tone="positive"
                 />
               ) : (
-                "—"
+                "-"
               )
             }
             hint={pulse.hottest?.player_name}
@@ -119,7 +121,7 @@ export function MarketIntelligenceDashboard({
                   tone="negative"
                 />
               ) : (
-                "—"
+                "-"
               )
             }
             hint={pulse.coldest?.player_name}
@@ -132,7 +134,7 @@ export function MarketIntelligenceDashboard({
         <div>
           <h3 className="dash-section-title">Movement</h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Largest daily moves vs each player&apos;s prior game
+            Largest moves vs each player&apos;s prior ingested game
           </p>
         </div>
         <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">

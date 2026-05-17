@@ -1,4 +1,4 @@
-# NBA paper market — web app
+# NBA paper market - web app
 
 Next.js 16 app for the paper-trading UI and API routes. See the [repository README](../README.md) for the full pipeline, BALLDONTLIE vs `nba_api` data sources, Supabase setup, and deployment.
 

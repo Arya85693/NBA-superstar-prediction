@@ -34,7 +34,7 @@ export default function ForgotPasswordPage() {
       );
       setEmail("");
     } catch {
-      setErrorMessage("Network error — try again.");
+      setErrorMessage("Network error - try again.");
     } finally {
       setLoading(false);
     }

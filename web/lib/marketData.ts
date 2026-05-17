@@ -33,7 +33,7 @@ function parseOptionalNum(v: string | undefined): number | null {
 let activeFileCache: { mtimeMs: number; ids: Set<number> } | null = null;
 let activeSupabaseCache: { revision: number; ids: Set<number> } | null = null;
 
-/** Active roster IDs — from CSV (local) or active_players table (hosted). */
+/** Active roster IDs - from CSV (local) or active_players table (hosted). */
 export async function loadActivePlayerIds(): Promise<Set<number>> {
   if (pricesFromSupabase()) {
     const supabase = createSupabaseServerClient();
@@ -64,7 +64,7 @@ export async function loadActivePlayerIds(): Promise<Set<number>> {
         if (Number.isFinite(id) && id > 0) ids.add(id);
       }
       from += data.length;
-      // Do not compare to pageSize — PostgREST may cap below our request; keep paging until empty.
+      // Do not compare to pageSize - PostgREST may cap below our request; keep paging until empty.
     }
     activeSupabaseCache = { revision, ids };
     return ids;
@@ -378,7 +378,7 @@ async function parsePricesBundleFromSupabase(
     }
 
     from += data.length;
-    // Do not compare to pageSize — server max rows may be < PRICES_SUPABASE_PAGE_SIZE; keep until empty.
+    // Do not compare to pageSize - server max rows may be < PRICES_SUPABASE_PAGE_SIZE; keep until empty.
   }
 
   const bundle = await finalizeBundleState(state);
@@ -600,7 +600,7 @@ export async function getTickerForPlayer(
   return b.tickers.get(playerId) ?? null;
 }
 
-/** Version tag for server cache — bumps when prices file or Supabase revision changes. */
+/** Version tag for server cache - bumps when prices file or Supabase revision changes. */
 async function marketBoardCacheKey(): Promise<string> {
   if (pricesFromSupabase()) {
     const supabase = createSupabaseServerClient();
@@ -648,7 +648,7 @@ async function buildMarketRows(): Promise<MarketRow[]> {
 }
 
 /**
- * Full market board — expensive on cold load. Cached server-side between tab visits
+ * Full market board - expensive on cold load. Cached server-side between tab visits
  * until prices revision / file mtime changes (see `marketBoardCacheKey`).
  */
 export async function getMarketRows(): Promise<MarketRow[]> {

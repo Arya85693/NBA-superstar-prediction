@@ -2,7 +2,7 @@ import { buildSmoothSvgPath } from "@/lib/chartTheme";
 
 const BARS = [38, 52, 42, 58, 48, 64, 50, 68, 54, 60];
 
-/** Reserved slot for future per-player sparklines — smooth mini line strip. */
+/** Reserved slot for future per-player sparklines - smooth mini line strip. */
 export function SparklinePlaceholder({ positive }: { positive?: boolean }) {
   const w = 68;
   const h = 32;

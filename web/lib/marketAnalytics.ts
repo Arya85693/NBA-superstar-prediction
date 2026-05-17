@@ -221,7 +221,7 @@ export function formatRelativeUpdated(iso: string | null | undefined): string {
 }
 
 export function formatPct(n: number | null, opts?: { signed?: boolean }): string {
-  if (n === null || Number.isNaN(n)) return "—";
+  if (n === null || Number.isNaN(n)) return "-";
   const sign = opts?.signed !== false && n > 0 ? "+" : "";
   return `${sign}${n.toFixed(2)}%`;
 }

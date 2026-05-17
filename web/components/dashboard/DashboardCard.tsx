@@ -4,6 +4,7 @@ export function DashboardCard({
   label,
   value,
   hint,
+  labelTitle,
   valueClassName,
   children,
   className,
@@ -13,11 +14,13 @@ export function DashboardCard({
   label: string;
   value: ReactNode;
   hint?: string;
+  /** Native tooltip on the metric label (e.g. Board Total definition). */
+  labelTitle?: string;
   valueClassName?: string;
   children?: ReactNode;
   className?: string;
   compactValue?: boolean;
-  /** Featured = headline metrics (index cap, median). */
+  /** Featured = headline board metrics (board total, median). */
   variant?: "default" | "featured";
 }) {
   const shell =
@@ -37,7 +40,9 @@ export function DashboardCard({
 
   return (
     <div className={`flex flex-col ${shell} ${className ?? ""}`}>
-      <p className="dash-label">{label}</p>
+      <p className="dash-label" title={labelTitle}>
+        {label}
+      </p>
       <div
         className={`mt-3 min-w-0 text-foreground ${valueLayout} ${valueSize} ${valueClassName ?? ""}`}
       >

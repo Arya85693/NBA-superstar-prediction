@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 /**
  * Supabase client bound to the user's session (cookies). Use in Server
- * Components, Route Handlers, and Server Actions — not in middleware.
+ * Components, Route Handlers, and Server Actions - not in middleware.
  */
 export async function createSupabaseSessionServer() {
   const cookieStore = await cookies();

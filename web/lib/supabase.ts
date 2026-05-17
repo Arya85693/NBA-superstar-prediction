@@ -47,7 +47,7 @@ export function createSupabaseServiceRoleClient(): SupabaseClient {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     throw new Error(
-      "Missing SUPABASE_SERVICE_ROLE_KEY or Supabase URL. Add the service role key to Vercel (server env only) and web/.env.local — never NEXT_PUBLIC_*.",
+      "Missing SUPABASE_SERVICE_ROLE_KEY or Supabase URL. Add the service role key to Vercel (server env only) and web/.env.local - never NEXT_PUBLIC_*.",
     );
   }
   assertJwtRoleIsServiceRole(key.trim());

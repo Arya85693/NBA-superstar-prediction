@@ -70,7 +70,7 @@ export function BreadthPanel({ breadth }: { breadth: Breadth }) {
 
       {/* Distribution bar */}
       <div className="mt-8">
-        <p className="hs-label mb-3">Daily move distribution</p>
+        <p className="hs-label mb-3">Move vs prior ingested game</p>
         <div
           className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-surface-inset p-0.5"
           role="img"

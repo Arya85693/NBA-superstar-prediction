@@ -16,15 +16,15 @@ export type MarketRow = PriceRow & {
   change_pct: number | null;
   /** True if this player has no row with minutes > 0 in the dataset's latest season */
   caution_no_play_current_season: boolean;
-  /** Short symbol (e.g. AMZN-style) — unique within the active market list */
+  /** Short symbol (e.g. AMZN-style) - unique within the active market list */
   ticker: string;
 };
 
-/** Label for tooltips, e.g. "2025-26" — newest season present in player_game_prices.csv */
+/** Label for tooltips, e.g. "2025-26" - newest season present in player_game_prices.csv */
 export type MarketMeta = {
   current_dataset_season: string | null;
   current_dataset_last_game_date?: string | null;
-  /** Supabase revision or local CSV mtimeMs — cache-bust key for prices data */
+  /** Supabase revision or local CSV mtimeMs - cache-bust key for prices data */
   prices_revision?: number;
   /** When prices were last written (Supabase updated_at or CSV mtime) */
   data_updated_at?: string | null;

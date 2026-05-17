@@ -1,25 +1,14 @@
 import Link from "next/link";
+import { SnapshotBadge } from "@/components/market/SnapshotBadge";
 import { TeamBadge } from "@/components/dashboard/teamBadge";
+import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
 import { formatUsd, formatUsdNumberOnly } from "@/lib/format";
 import { formatPct } from "@/lib/marketAnalytics";
+import { MiniAreaChart } from "@/components/home/MiniAreaChart";
+import { buildRepricingPulseSeries } from "@/lib/boardPulseSeries";
+import { BOARD_TOTAL_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketAnalytics } from "@/lib/marketAnalytics";
 import type { MarketMeta } from "@/lib/types";
-import { MiniAreaChart } from "./MiniAreaChart";
-
-function buildIndexSeries(analytics: MarketAnalytics): number[] {
-  const moves = [
-    ...analytics.topGainers.map((m) => m.change_pct),
-    ...analytics.topLosers.map((m) => m.change_pct),
-  ];
-  if (moves.length < 4) {
-    return [42, 44, 43, 47, 46, 49, 48, 52, 51, 54];
-  }
-  let level = 50;
-  return moves.slice(0, 10).map((pct) => {
-    level += pct * 0.35;
-    return level;
-  });
-}
 
 export function MarketPreviewCard({
   analytics,
@@ -32,9 +21,9 @@ export function MarketPreviewCard({
 }) {
   const { pulse } = analytics;
   const featured = pulse.hottest ?? analytics.topGainers[0] ?? null;
-  const indexPositive = pulse.gainersPct >= pulse.losersPct;
-  const series = buildIndexSeries(analytics);
   const season = meta.current_dataset_season ?? "Current season";
+  const pulseSeries = buildRepricingPulseSeries(analytics);
+  const pulsePositive = pulse.gainersPct >= pulse.losersPct;
 
   return (
     <div className="hs-hero-market-card relative overflow-hidden">
@@ -44,25 +33,42 @@ export function MarketPreviewCard({
       />
       <div className="relative">
         <div className="flex items-center justify-between gap-3">
-          <LiveBadge />
+          <SnapshotBadge />
           <span className="font-mono text-[11px] text-muted">
-            {season} · {listingCount} tickers
+            {season} · {listingCount} tracked
           </span>
         </div>
 
+        <div className="mt-4">
+          <MarketRefreshMeta meta={meta} variant="compact" />
+        </div>
+
         <div className="mt-5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">
-            Market cap index
+          <p
+            className="text-[10px] font-semibold uppercase tracking-widest text-muted"
+            title={BOARD_TOTAL_TOOLTIP}
+          >
+            Board total
           </p>
           <p className="font-mono text-2xl font-semibold tabular-nums tracking-tight text-charcoal md:text-[1.65rem]">
             {formatUsd(pulse.totalMarketCap)}
           </p>
-          <p className="mt-1 font-mono text-xs text-muted">
-            Sum of model quotes across active listings
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Sum of latest model quotes across tracked players
           </p>
-          <div className="mt-4 h-[4.5rem] w-full">
-            <MiniAreaChart values={series} positive={indexPositive} />
-          </div>
+          {pulseSeries ? (
+            <div className="mt-4">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">
+                Repricing pulse
+              </p>
+              <div className="mt-2 h-[4.5rem] w-full">
+                <MiniAreaChart values={pulseSeries} positive={pulsePositive} />
+              </div>
+              <p className="mt-1.5 text-[10px] text-muted">
+                Indexed from largest moves in this snapshot
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-2 border-t border-border/70 pt-5">
@@ -86,7 +92,7 @@ export function MarketPreviewCard({
           >
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">
-                Top mover
+                Latest mover
               </p>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <span className="font-mono text-sm font-semibold text-accent">
@@ -108,18 +114,6 @@ export function MarketPreviewCard({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function LiveBadge() {
-  return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-positive/25 bg-positive-muted/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest text-positive">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="hs-live-ping absolute inline-flex h-full w-full rounded-full bg-positive opacity-60" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-positive" />
-      </span>
-      Live board
-    </span>
   );
 }
 

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  /* Canvas — warm hybrid light */
+  /* Canvas - warm hybrid light */
   --background: #f3efe8;
   --foreground: #1a1816;
   --charcoal: #1e2a38;
@@ -11,7 +11,7 @@
   --surface-inset: #e9e5df;
   --surface-elevated: #ffffff;
 
-  /* Brand — dusty rose, restrained */
+  /* Brand - dusty rose, restrained */
   --accent: #b76e79;
   --accent-hover: #9a5866;
   --accent-muted: #f3e8eb;
@@ -133,7 +133,7 @@ body {
 }
 
 @layer components {
-  /* —— Typography —— */
+  /* -- Typography -- */
   .hs-eyebrow {
     font-size: 0.6875rem;
     font-weight: 600;
@@ -187,7 +187,7 @@ body {
     color: var(--foreground);
   }
 
-  /* —— Surfaces —— */
+  /* -- Surfaces -- */
   .hs-card,
   .dash-surface {
     border-radius: var(--radius-lg);
@@ -224,7 +224,7 @@ body {
     border: 1px solid var(--border);
   }
 
-  /* —— Buttons —— */
+  /* -- Buttons -- */
   .hs-btn {
     display: inline-flex;
     align-items: center;
@@ -297,7 +297,7 @@ body {
     cursor: not-allowed;
   }
 
-  /* —— Form controls —— */
+  /* -- Form controls -- */
   .hs-input {
     width: 100%;
     border-radius: var(--radius-md);
@@ -336,7 +336,7 @@ body {
     box-shadow: 0 0 0 3px rgb(181 106 122 / 0.12);
   }
 
-  /* —— Callouts —— */
+  /* -- Callouts -- */
   .hs-callout {
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
@@ -353,7 +353,7 @@ body {
     color: var(--charcoal);
   }
 
-  /* —— Tables —— */
+  /* -- Tables -- */
   .hs-table-shell {
     overflow-x: auto;
     border-radius: var(--radius-xl);
@@ -404,7 +404,7 @@ body {
     box-shadow: inset 0 0 0 2px rgb(181 106 122 / 0.25);
   }
 
-  /* —— Page rhythm —— */
+  /* -- Page rhythm -- */
   .hs-page-section {
     margin-top: 4rem;
   }
@@ -567,7 +567,7 @@ body {
     box-shadow: var(--shadow-xs), inset 0 0 0 1px rgb(207 200 191 / 0.6);
   }
 
-  /* Charts — premium finance, soft grid, tight plot area */
+  /* Charts - premium finance, soft grid, tight plot area */
   .hs-chart-shell {
     min-width: 0;
   }
@@ -594,7 +594,7 @@ body {
     letter-spacing: -0.02em;
   }
 
-  /* Team / ticker chips — calm, not rainbow */
+  /* Team / ticker chips - calm, not rainbow */
   .hs-ticker-chip {
     display: flex;
     height: 2.5rem;

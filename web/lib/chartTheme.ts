@@ -1,4 +1,4 @@
-/** Shared tokens for Recharts + SVG charts — editorial finance, not crypto UI. */
+/** Shared tokens for Recharts + SVG charts - editorial finance, not crypto UI. */
 
 export const CHART_ACCENT = "#b76e79";
 export const CHART_ACCENT_RGB = "183 110 121";

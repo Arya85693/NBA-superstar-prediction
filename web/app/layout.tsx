@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     template: "%s · Hoops Stock Market",
   },
   description:
-    "Simulated basketball player market with paper trading and model-driven prices from your pipeline.",
+    "Near real-time NBA player market analytics - model-driven paper trading with automated repricing from ingested game data (~30 min refresh cadence).",
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",
@@ -95,9 +95,9 @@ export default function RootLayout({
 
             <p className="max-w-sm leading-relaxed">
 
-              Simulation only — paper currency and model prices. Not investment advice or real
+              Model-driven simulation - paper currency only. Prices refresh on ingestion cycles
 
-              securities.
+              (~30 min), not tick-by-tick. Not investment advice or real securities.
 
             </p>
 

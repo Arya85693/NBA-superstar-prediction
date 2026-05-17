@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { PriceChart, type ChartPoint } from "@/components/PriceChart";
-import type { PriceRow } from "@/lib/types";
+import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
+import type { MarketMeta, PriceRow } from "@/lib/types";
 
 export type ChartRange = "1w" | "1m" | "1y";
 
@@ -32,10 +33,6 @@ function sortHistory(history: PriceRow[]): PriceRow[] {
   );
 }
 
-/**
- * Daily carried-forward series anchored to the market's latest dataset date.
- * If the player has not played recently, their last price stays flat into the window.
- */
 export function buildChartPointsForRange(
   history: PriceRow[],
   range: ChartRange,
@@ -90,9 +87,11 @@ export function buildChartPointsForRange(
 export function PlayerChartSection({
   history,
   marketEndDate,
+  marketMeta,
 }: {
   history: PriceRow[];
   marketEndDate?: string | null;
+  marketMeta?: MarketMeta;
 }) {
   const [range, setRange] = useState<ChartRange>("1m");
 
@@ -107,6 +106,9 @@ export function PlayerChartSection({
 
   return (
     <div className="min-w-0">
+      {marketMeta ? (
+        <MarketRefreshMeta meta={marketMeta} variant="compact" className="mb-4" />
+      ) : null}
       <div className="mb-4 flex flex-wrap gap-2">
         {TABS.map(({ key, label }) => {
           const on = range === key;
@@ -132,10 +134,16 @@ export function PlayerChartSection({
         </p>
       ) : (
         <>
-          <p className="mb-3 text-xs text-muted">
+          <p className="mb-2 text-xs text-muted">
             Showing {points.length} day{points.length === 1 ? "" : "s"} · {gamesInWindow} game
             {gamesInWindow === 1 ? "" : "s"} in window · end date {points[points.length - 1]?.date}
           </p>
+          {gamesInWindow === 0 ? (
+            <p className="mb-3 rounded-lg border border-border bg-surface-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              No new game data in this interval - model price is carried forward from the last
+              ingested game.
+            </p>
+          ) : null}
           <div className="hs-chart-frame rounded-xl border border-border/80 bg-surface px-2 pb-1 pt-3 sm:px-3">
             <PriceChart points={points} />
           </div>

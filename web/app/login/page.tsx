@@ -67,7 +67,7 @@ function LoginForm() {
       if (!res.ok) {
         setErrorMessage(
           data.error ??
-            `Sign-in failed (${res.status}). If you just registered, confirm your email via the link we sent — then sign in here.`,
+            `Sign-in failed (${res.status}). If you just registered, confirm your email via the link we sent - then sign in here.`,
         );
         return;
       }
@@ -75,7 +75,7 @@ function LoginForm() {
       router.refresh();
       window.location.assign("/");
     } catch {
-      setErrorMessage("Network error — try again.");
+      setErrorMessage("Network error - try again.");
     } finally {
       setLoading(false);
     }
@@ -90,7 +90,7 @@ function LoginForm() {
           Sign in
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          Welcome back — use the same password you chose at sign-up (after confirming your email,
+          Welcome back - use the same password you chose at sign-up (after confirming your email,
           if required).
         </p>
       </div>

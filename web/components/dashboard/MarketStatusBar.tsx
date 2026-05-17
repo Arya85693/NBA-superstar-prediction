@@ -1,5 +1,6 @@
-import type { MarketMeta } from "@/lib/types";
 import { formatRelativeUpdated } from "@/lib/marketAnalytics";
+import { formatLastRefreshAt, REFRESH_CADENCE_LABEL } from "@/lib/marketRefresh";
+import type { MarketMeta } from "@/lib/types";
 
 export function MarketStatusBar({
   meta,
@@ -8,25 +9,29 @@ export function MarketStatusBar({
   meta: MarketMeta;
   listingCount: number;
 }) {
-  const season = meta.current_dataset_season ?? "—";
-  const lastGame = meta.current_dataset_last_game_date ?? "—";
-  const revision =
-    meta.prices_revision != null ? String(meta.prices_revision) : "—";
-  const updatedLabel = formatRelativeUpdated(meta.data_updated_at);
+  const season = meta.current_dataset_season ?? "-";
+  const lastGame = meta.current_dataset_last_game_date ?? "-";
+  const updatedRelative = formatRelativeUpdated(meta.data_updated_at);
+  const updatedAbsolute = formatLastRefreshAt(meta.data_updated_at);
 
   return (
     <div className="hs-inset flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4 font-mono text-sm text-muted-foreground md:gap-x-10 md:px-6">
       <StatusItem label="Season" value={season} accent />
       <Divider />
-      <StatusItem label="Last game" value={lastGame} />
+      <StatusItem label="Last game in data" value={lastGame} />
       <Divider className="hidden sm:block" />
-      <StatusItem label="Revision" value={revision} />
-      <Divider className="hidden sm:block" />
-      <StatusItem label="Listings" value={String(listingCount)} />
+      <StatusItem label="Tracked" value={String(listingCount)} />
       <Divider className="hidden md:block" />
       <span className="text-muted">
-        <span className="text-muted-foreground">Updated </span>
-        <span className="font-medium text-accent">{updatedLabel}</span>
+        <span className="text-muted-foreground">Ingested </span>
+        <span className="font-medium text-accent">{updatedRelative}</span>
+        {updatedAbsolute ? (
+          <>
+            <span className="text-muted"> · </span>
+            <span className="font-medium text-foreground">{updatedAbsolute}</span>
+          </>
+        ) : null}
+        <span className="text-muted"> · Cadence {REFRESH_CADENCE_LABEL}</span>
       </span>
     </div>
   );

@@ -17,7 +17,7 @@ function copyAuthCookies(from: NextResponse, to: NextResponse) {
   }
 }
 
-/** Next.js 16+: `middleware.ts` renamed to `proxy.ts` — same Edge behavior. */
+/** Next.js 16+: `middleware.ts` renamed to `proxy.ts` - same Edge behavior. */
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 

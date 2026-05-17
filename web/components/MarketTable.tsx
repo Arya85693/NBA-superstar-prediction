@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { formatUsdNumberOnly } from "@/lib/format";
+import { CHANGE_VS_PRIOR_GAME_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketMeta, MarketRow } from "@/lib/types";
 
 function fmtPct(n: number | null) {
-  if (n === null || Number.isNaN(n)) return "—";
+  if (n === null || Number.isNaN(n)) return "-";
   const sign = n >= 0 ? "+" : "";
   return `${sign}${n.toFixed(2)}%`;
 }
@@ -15,7 +16,7 @@ function fmtPct(n: number | null) {
 function priceCautionTitle(meta: MarketMeta | undefined): string {
   const s = meta?.current_dataset_season;
   return s
-    ? `No minutes logged in ${s} in this dataset — price may reflect prior seasons or projections only.`
+    ? `No minutes logged in ${s} in this dataset - price may reflect prior seasons or projections only.`
     : "No minutes logged in the latest season in this dataset.";
 }
 
@@ -204,7 +205,7 @@ export function MarketTable({
                 )}
               </>
             )}
-            {q.trim() ? " · filtered by search" : ""}. Row opens detail — charts &amp; trade.
+            {q.trim() ? " · filtered by search" : ""}. Row opens detail - charts &amp; trade.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -286,7 +287,9 @@ export function MarketTable({
               <th className="pl-5">Player</th>
               <th>Team</th>
               <th className="text-right">Price</th>
-              <th className="text-right">Change</th>
+              <th className="text-right" title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
+                Change
+              </th>
               <th className="text-right">Last game</th>
               <th className="pr-5 text-right">&nbsp;</th>
             </tr>
@@ -363,7 +366,7 @@ export function MarketTable({
               onClick={() => setShowAll(true)}
               className="rounded-xl border border-border-strong bg-surface-muted px-6 py-2.5 text-sm font-medium text-foreground transition hover:border-accent/50 hover:bg-surface-inset hover:text-foreground"
             >
-              Show more — {hiddenCount} more player{hiddenCount === 1 ? "" : "s"}
+              Show more - {hiddenCount} more player{hiddenCount === 1 ? "" : "s"}
             </button>
           ) : (
             <button

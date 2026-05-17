@@ -26,8 +26,8 @@ const modelSteps = [
   },
   {
     step: "02",
-    title: "Live games",
-    body: "As regular-season and playoff games land in your dataset, performance feeds the model. The price is a smoothed signal — it carries season context, not just the last box score.",
+    title: "Ingested games",
+    body: "As regular-season and playoff games enter each ingestion cycle (~30 min cadence), performance feeds the automated repricing engine. The price is a smoothed signal - it carries season context, not just the last box score.",
     icon: "◇",
   },
   {
@@ -55,7 +55,7 @@ const screens = [
     accent: "from-sky-500/12 to-transparent",
     bullets: [
       "Ticker, team, last game date, and season label sit up top for orientation.",
-      "Charts compare model price to game score over time and carry prices forward between games, so inactive stretches stay visible.",
+      "Price charts carry model quotes forward between games; tooltips show game score on nights with ingested box scores.",
       "The trade panel buys and sells whole shares at the latest model price.",
     ],
   },
@@ -64,7 +64,7 @@ const screens = [
     href: "/portfolio",
     accent: "from-violet-500/12 to-transparent",
     bullets: [
-      "Paper cash, position value, and total equity — same framing as a simple brokerage view.",
+      "Paper cash, position value, and total equity - same framing as a simple brokerage view.",
       "Use it to test sizing and holds against the same quotes the model publishes.",
     ],
   },
@@ -73,7 +73,7 @@ const screens = [
 const glossary = [
   {
     term: "Model price",
-    def: "The simulator’s valuation for one share of a player at the latest ingested game — not a market quote from any exchange.",
+    def: "The simulator’s valuation for one share of a player at the latest ingested game - not a market quote from any exchange.",
   },
   {
     term: "Game score",
@@ -85,15 +85,24 @@ const glossary = [
   },
   {
     term: "Change vs prior game",
-    def: "Difference in model price from the previous game row in your dataset for that player — useful for scanning the board.",
+    def: "Difference in model price from the previous ingested game row for that player - useful for scanning the latest snapshot.",
+  },
+  {
+    term: "Rolling snapshot",
+    def: "Board state after the most recent ingestion cycle. Quotes refresh when new games are added (~30 min cadence), not tick-by-tick.",
+  },
+  {
+    term: "Board total",
+    def: "Sum of latest model prices across tracked players. An internal aggregate - not exchange market capitalization.",
   },
 ] as const;
 
 export default async function HowItWorksPage() {
   let seasonLabel: string | null = null;
+  let marketMeta: Awaited<ReturnType<typeof getMarketMeta>> | undefined;
   try {
-    const meta = await getMarketMeta();
-    seasonLabel = meta.current_dataset_season;
+    marketMeta = await getMarketMeta();
+    seasonLabel = marketMeta.current_dataset_season;
   } catch {
     /* page still renders */
   }
@@ -103,7 +112,9 @@ export default async function HowItWorksPage() {
       <PageHeader
         eyebrow="Guide"
         title="How it works"
-        description="A practical map of the simulator: how prices are built, what each screen is for, and how simulated trading fits in. This is education about the app — not financial advice, and not real securities."
+        description="How the automated repricing engine works, how rolling snapshots refresh (~30 min when new games ingest), and how paper trading fits in. Educational - not financial advice or real securities."
+        marketMeta={marketMeta}
+        showSimulationNote
       />
 
       {/* Quick jump */}
@@ -137,9 +148,9 @@ export default async function HowItWorksPage() {
               At a glance
             </p>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-foreground">
-              You&apos;re paper-trading model-implied &quot;shares&quot; of players. Prices blend anchors,
-              history, and new games; the UI is built so you can sanity-check moves against charts and
-              season context — not chase one noisy stat.
+              You&apos;re paper-trading simulated shares tied to player value. Prices blend anchors, history,
+              and each ingestion cycle; the board refreshes automatically (~30 min) when new games
+              arrive - a rolling snapshot, not a live exchange feed.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-3 sm:flex-row md:flex-col">
@@ -228,10 +239,10 @@ export default async function HowItWorksPage() {
           <div className="md:max-w-md md:shrink-0">
             <h2 className="text-lg font-semibold text-foreground">Charts &amp; game score</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              On a player page, game score is that night&apos;s Hollinger-style summary from the box
-              score. Model price can stay elevated after a soft night because the path carries prior
-              games and season structure — use the chart window and season averages to see whether a
-              move is a blip or part of a trend.
+              On a player page, game score is that night&apos;s Hollinger-style summary when a game
+              was ingested. Model price can stay elevated after a soft night because the path carries
+              prior games and season structure - use chart ranges and season averages to separate blips
+              from trends. Flat stretches mean no new game data in that interval.
             </p>
           </div>
           <div className="mt-6 flex-1 border-t border-border pt-6 md:mt-0 md:border-l md:border-t-0 md:pl-10 md:pt-0">
@@ -243,7 +254,7 @@ export default async function HowItWorksPage() {
                 <span className="text-positive/80" aria-hidden>
                   ✓
                 </span>
-                <span>Compare the latest point to the season line — not only to yesterday.</span>
+                <span>Compare the latest point to the season line - not only to yesterday.</span>
               </li>
               <li className="flex gap-2.5">
                 <span className="text-positive/80" aria-hidden>
@@ -276,7 +287,7 @@ export default async function HowItWorksPage() {
         <div className="mt-6 rounded-2xl border border-border bg-surface p-6 md:p-8">
           <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
             You start with paper cash. Orders are whole shares at the latest model price shown on
-            that player — there&apos;s no bid/ask spread or slippage simulation. Your portfolio rolls
+            that player - there&apos;s no bid/ask spread or slippage simulation. Your portfolio rolls
             up cash, mark-to-model position value, and total equity so you can rehearse allocation
             ideas on the same timeline as your ingested games.
           </p>
@@ -318,7 +329,7 @@ export default async function HowItWorksPage() {
             ) : (
               " in the newest season present"
             )}{" "}
-            in your dataset file — injury, inactive, or data lag. The price may still reflect older
+            in your dataset file - injury, inactive, or data lag. The price may still reflect older
             seasons or the model anchor; treat it as stale relative to current floor time until your
             file catches up.
           </p>
@@ -347,13 +358,13 @@ export default async function HowItWorksPage() {
       </section>
 
       {/* Closing disclaimer + CTAs */}
-      <div className="mt-16 rounded-2xl border border-border bg-surface-muted/35 px-6 py-8 md:mt-20 md:px-10">
-        <p className="max-w-3xl text-sm leading-relaxed text-muted">
-          Simulation only — paper currency and model-driven prices. Nothing here is investment
+      <div className="hs-panel-cta mt-16 flex w-full flex-col gap-6 px-7 py-8 md:mt-20 md:flex-row md:items-center md:justify-between md:px-10 md:py-9">
+        <p className="max-w-2xl text-sm leading-relaxed text-muted md:pr-6">
+          Simulation only - paper currency and model-driven prices. Nothing here is investment
           advice, a prediction of real athletic or financial outcomes, or an offer of securities.
           If your pipeline or dataset changes, replay history and labels change with it.
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="flex shrink-0 flex-wrap gap-3">
           <Link
             href="/market"
             className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover"

@@ -3,8 +3,10 @@ import Link from "next/link";
 import { DashboardCard } from "@/components/dashboard/DashboardCard";
 import { MarketStatusBar } from "@/components/dashboard/MarketStatusBar";
 import { MoverKpiValue } from "@/components/dashboard/MoverKpiValue";
+import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
 import { formatUsd } from "@/lib/format";
 import { formatPct } from "@/lib/marketAnalytics";
+import { BOARD_TOTAL_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketAnalytics } from "@/lib/marketAnalytics";
 import type { MarketMeta } from "@/lib/types";
 import { MarketTicker } from "./MarketTicker";
@@ -25,10 +27,10 @@ export function HomeMarketPulse({
   ];
 
   return (
-    <section className="mt-0" aria-labelledby="home-pulse-heading">
+    <section className="mt-10" aria-labelledby="home-pulse-heading">
       <div className="mb-6">
         <div className="flex items-center justify-between gap-4">
-          <p className="hs-eyebrow">Live pulse</p>
+          <p className="hs-eyebrow">Market pulse</p>
           <Link href="/market" className="hs-btn hs-btn-secondary shrink-0 text-sm">
             Full board →
           </Link>
@@ -37,11 +39,13 @@ export function HomeMarketPulse({
           id="home-pulse-heading"
           className="mt-2 text-xl font-semibold tracking-tight text-charcoal md:text-2xl"
         >
-          Market snapshot
+          Rolling snapshot metrics
         </h2>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
-          Same model quotes as the full board — daily move vs each player&apos;s prior game.
+          Same automated model quotes as the full board - move vs each player&apos;s prior
+          ingested game.
         </p>
+        <MarketRefreshMeta meta={meta} variant="compact" className="mt-3" />
       </div>
 
       <div className="mt-4">
@@ -56,9 +60,10 @@ export function HomeMarketPulse({
         <div className="grid gap-4 sm:grid-cols-2 lg:col-span-7">
           <DashboardCard
             variant="featured"
-            label="Index cap"
+            label="Board total"
+            labelTitle={BOARD_TOTAL_TOOLTIP}
             value={formatUsd(pulse.totalMarketCap)}
-            hint="Sum of latest model prices."
+            hint="Sum of latest model quotes across tracked players."
             className="hs-card-premium"
           />
           <DashboardCard
@@ -97,7 +102,7 @@ export function HomeMarketPulse({
                     tone="positive"
                   />
                 ) : (
-                  "—"
+                  "-"
                 )
               }
             />
@@ -111,7 +116,7 @@ export function HomeMarketPulse({
                     tone="negative"
                   />
                 ) : (
-                  "—"
+                  "-"
                 )
               }
             />
@@ -149,3 +154,4 @@ function CompactStat({
     </div>
   );
 }
+

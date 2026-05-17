@@ -30,21 +30,35 @@ export function LandingHero({
 
       <div className="relative grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 xl:gap-12">
         <div className="max-w-xl lg:max-w-none">
-          <Eyebrow>Sports market intelligence</Eyebrow>
+          <Eyebrow>Track · Trade · Learn</Eyebrow>
           <h1 className="hs-display mt-4 text-charcoal">
-            The live market desk for{" "}
-            <span className="text-accent">NBA player markets</span>
+            NBA player value that moves with{" "}
+            <span className="text-accent">real games</span>
           </h1>
           <p className="hs-prose mt-4 max-w-lg">
-            Model-driven quotes, live board context, and paper trading — explore how
-            on-court performance shapes price without real money.
+            See who repriced after each refresh, understand why, and paper trade players you
+            believe in - no real money, updated automatically from game data.
           </p>
+          <ul className="mt-4 space-y-1.5 text-sm text-muted-foreground">
+            <li className="flex gap-2">
+              <span className="text-accent" aria-hidden>→</span>
+              Model prices from on-court performance
+            </li>
+            <li className="flex gap-2">
+              <span className="text-accent" aria-hidden>→</span>
+              Board refreshes ~every 30 minutes
+            </li>
+            <li className="flex gap-2">
+              <span className="text-accent" aria-hidden>→</span>
+              $100k paper portfolio to practice
+            </li>
+          </ul>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:gap-4">
             <ButtonLink href="/market" variant="primary" size="lg" className="min-w-[11rem]">
-              Open market
+              See latest movers
             </ButtonLink>
             <ButtonLink href="/portfolio" variant="secondary" size="lg" className="min-w-[11rem]">
-              View portfolio
+              My portfolio
             </ButtonLink>
           </div>
           <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
@@ -79,7 +93,7 @@ function HeroPreviewPlaceholder() {
   return (
     <div className="hs-hero-market-card flex min-h-[18rem] items-center justify-center border-dashed">
       <p className="max-w-xs text-center text-sm text-muted">
-        Connect market data to preview live board metrics here.
+        Connect market data to preview the latest rolling snapshot here.
       </p>
     </div>
   );
@@ -88,7 +102,7 @@ function HeroPreviewPlaceholder() {
 const features = [
   {
     title: "Model-driven prices",
-    body: "Smoothing across IPO, prior-season productivity, and live game signal — not just last night's box score.",
+    body: "Smoothing across opening anchor, prior-season productivity, and each new ingested game - not just last night's box score.",
     mark: "01",
   },
   {
@@ -109,11 +123,11 @@ export function LandingFeatures() {
       <div className="mx-auto max-w-2xl text-center">
         <Eyebrow className="text-muted">Platform</Eyebrow>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight text-charcoal md:text-[1.75rem]">
-          Built for clarity, not clutter
+          Engineered for rolling snapshots
         </h2>
         <p className="hs-prose mx-auto mt-3 max-w-lg">
-          Every screen ties back to the same model quotes — scan the board, drill into a player,
-          and paper trade with confidence.
+          Every screen uses the same automated model quotes - scan the latest board, drill into a
+          player, and paper trade against each refresh cycle.
         </p>
       </div>
 
@@ -146,7 +160,7 @@ export function LandingCta({ seasonLabel }: { seasonLabel: string | null }) {
           </h2>
           <p className="hs-prose mt-3">
             Search players by name or team, sort by price, and drill into any listing for charts
-            and trading.
+            and paper trading on the latest snapshot.
             {seasonLabel && (
               <>
                 {" "}

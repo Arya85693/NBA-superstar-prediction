@@ -5,7 +5,7 @@ import {
   buildSmoothSvgPath,
 } from "@/lib/chartTheme";
 
-/** Lightweight SVG area chart for homepage previews — smooth monotone curve. */
+/** Lightweight SVG area chart for homepage previews - smooth monotone curve. */
 export function MiniAreaChart({
   values,
   positive,

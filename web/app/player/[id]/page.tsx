@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { WatchlistButton } from "@/components/engagement/WatchlistButton";
+import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
+import { PlayerInsightsPanel } from "@/components/player/PlayerInsightsPanel";
 import { PlayerChartSection } from "@/components/PlayerChartSection";
 import { TradePanel } from "@/components/TradePanel";
 import { formatUsd } from "@/lib/format";
@@ -50,7 +53,7 @@ export default async function PlayerPage({
 
   if (!quote) notFound();
 
-  const ticker = tickerRaw ?? "—";
+  const ticker = tickerRaw ?? "-";
 
   const { avg: seasonAvgGmsc, count: seasonGmGames } = seasonGamesGmAvg(
     history,
@@ -61,11 +64,12 @@ export default async function PlayerPage({
   const seasonLabel = marketMeta.current_dataset_season;
   const cautionNoPlayCurrent = !playedCurrentSeason && Boolean(seasonLabel);
   const cautionTitle = seasonLabel
-    ? `No minutes logged in ${seasonLabel} in this dataset — price may reflect prior seasons or projections only.`
+    ? `No minutes logged in ${seasonLabel} in this dataset - price may reflect prior seasons or projections only.`
     : undefined;
 
   return (
     <div>
+      <MarketRefreshMeta meta={marketMeta} variant="compact" className="mb-4" />
       <nav className="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted">
         <Link href="/" className="hover:text-foreground">
           Home
@@ -88,26 +92,29 @@ export default async function PlayerPage({
             <p className="text-sm text-muted">{quote.team_abbr}</p>
             <span
               className="hs-team-badge font-mono tracking-wider text-accent"
-              title="Paper market ticker"
+              title="Short symbol for this listing"
             >
               {ticker}
             </span>
+            {ticker !== "-" ? (
+              <WatchlistButton
+                playerId={playerId}
+                playerName={quote.player_name}
+                ticker={ticker}
+                teamAbbr={quote.team_abbr}
+              />
+            ) : null}
           </div>
           <h1 className="text-3xl font-semibold tracking-tight">{quote.player_name}</h1>
           <p className="mt-2 text-sm text-muted">
             Last game {quote.game_date} · Season {quote.season}
           </p>
 
-          <div className="mt-5 hs-callout text-sm">
-            <p className="text-foreground">
-              <span className="font-medium text-foreground">Price</span> is a{" "}
-              <strong>smoothed</strong> value from season IPO, prior-year productivity, and
-              game-by-game updates — not “last night only.”{" "}
-              <span className="font-medium text-foreground">Game score</span> below is{" "}
-              <strong>just that last box score</strong>, so a quiet night can sit next to a
-              still-high price.
-            </p>
-          </div>
+          <PlayerInsightsPanel
+            history={history}
+            quote={quote}
+            seasonAvgGmsc={seasonAvgGmsc}
+          />
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="dash-kpi px-5 py-5">
@@ -128,7 +135,7 @@ export default async function PlayerPage({
                 )}
               </div>
               <p className="mt-2 text-xs text-muted">
-                Smoothed signal — see chart ranges for shape.
+                Smoothed signal - see chart ranges for shape.
               </p>
             </div>
 
@@ -147,7 +154,7 @@ export default async function PlayerPage({
                 Season avg · game score
               </div>
               <div className="mt-1 font-mono text-2xl text-foreground">
-                {seasonAvgGmsc != null ? seasonAvgGmsc.toFixed(1) : "—"}
+                {seasonAvgGmsc != null ? seasonAvgGmsc.toFixed(1) : "-"}
               </div>
               <p className="mt-2 text-xs text-muted">
                 {seasonGmGames > 0
@@ -163,7 +170,7 @@ export default async function PlayerPage({
               <div className="mt-1 font-mono text-2xl text-foreground">
                 {typeof priorAnchor === "number" && Number.isFinite(priorAnchor)
                   ? priorAnchor.toFixed(1)
-                  : "—"}
+                  : "-"}
               </div>
               <p className="mt-2 text-xs text-muted">
                 Mean GmSc in the season before this one (pricing anchor when available).
@@ -177,6 +184,7 @@ export default async function PlayerPage({
           <PlayerChartSection
             history={history}
             marketEndDate={marketMeta.current_dataset_last_game_date}
+            marketMeta={marketMeta}
           />
         </div>
 
@@ -185,7 +193,7 @@ export default async function PlayerPage({
             playerId={playerId}
             playerName={quote.player_name}
             price={quote.price_after_game}
-            ticker={ticker !== "—" ? ticker : undefined}
+            ticker={ticker !== "-" ? ticker : undefined}
           />
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-/** Route handlers only — sets auth cookies via `cookies()` without swallowing errors. */
+/** Route handlers only - sets auth cookies via `cookies()` without swallowing errors. */
 export async function createSupabaseAuthRouteHandlerClient() {
   const cookieStore = await cookies();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

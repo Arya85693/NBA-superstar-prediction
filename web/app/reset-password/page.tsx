@@ -78,7 +78,7 @@ export default function ResetPasswordPage() {
       await supabase.auth.signOut();
       window.location.assign("/login?reset=1");
     } catch {
-      setErrorMessage("Network error — try again.");
+      setErrorMessage("Network error - try again.");
     } finally {
       setLoading(false);
     }

@@ -8,7 +8,7 @@ import {
 import type { RecentTradeRow } from "@/lib/tradeHistory";
 
 function realizedLabel(pnl: number | null): string {
-  if (pnl === null) return "—";
+  if (pnl === null) return "-";
   return formatSignedUsd(pnl);
 }
 
