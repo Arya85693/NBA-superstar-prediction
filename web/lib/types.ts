@@ -30,4 +30,6 @@ export type Portfolio = {
   cash: number;
   /** player_id string -> whole shares */
   positions: Record<string, number>;
+  /** player_id string -> weighted avg cost per share (null if unknown) */
+  avgCostPerShare: Record<string, number | null>;
 };

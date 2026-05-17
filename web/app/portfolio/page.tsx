@@ -1,7 +1,9 @@
 import { AddMarketPosition } from "@/components/AddMarketPosition";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioHoldingsTable } from "@/components/PortfolioHoldingsTable";
+import { RecentActivity } from "@/components/RecentActivity";
 import { formatUsd } from "@/lib/format";
+import { formatSignedUsd, pnlTextClass } from "@/lib/portfolioPnl";
 import { getPortfolioSnapshot } from "@/lib/portfolioView";
 import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
 
@@ -35,7 +37,7 @@ export default async function PortfolioPage() {
       <PageHeader
         eyebrow="Account"
         title="Portfolio"
-        description="Starter account funded with $100,000. Holdings are valued at the latest model price — similar to a brokerage statement’s market value view (not purchase history)."
+        description="Starter account funded with $100,000. Holdings use latest model prices; cost basis and P&amp;L come from your trade history."
       />
 
       <div className="mb-8 grid gap-4 md:grid-cols-2">
@@ -65,9 +67,39 @@ export default async function PortfolioPage() {
             </span>
           </div>
           <p className="mt-2 text-xs text-zinc-600">
-            Compared to initial {formatUsd(snap.startingCash)} cash — simplified P&amp;L (no per-trade
-            cost basis stored).
+            Compared to initial {formatUsd(snap.startingCash)} cash — account-level change since
+            funding.
           </p>
+        </div>
+      </div>
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+        <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-5 shadow-sm shadow-black/20">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Realized P&amp;L
+          </div>
+          <div className={`mt-1 font-mono text-2xl ${pnlTextClass(snap.realizedPnl)}`}>
+            {formatSignedUsd(snap.realizedPnl)}
+          </div>
+          <p className="mt-2 text-xs text-zinc-600">Closed gains/losses from sells.</p>
+        </div>
+        <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-5 shadow-sm shadow-black/20">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Unrealized P&amp;L
+          </div>
+          <div className={`mt-1 font-mono text-2xl ${pnlTextClass(snap.unrealizedPnl)}`}>
+            {formatSignedUsd(snap.unrealizedPnl)}
+          </div>
+          <p className="mt-2 text-xs text-zinc-600">Open positions vs average cost.</p>
+        </div>
+        <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-5 shadow-sm shadow-black/20">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Total P&amp;L
+          </div>
+          <div className={`mt-1 font-mono text-2xl ${pnlTextClass(snap.totalPnl)}`}>
+            {formatSignedUsd(snap.totalPnl)}
+          </div>
+          <p className="mt-2 text-xs text-zinc-600">Realized plus unrealized.</p>
         </div>
       </div>
 
@@ -120,6 +152,11 @@ export default async function PortfolioPage() {
         Holdings &amp; trade
       </h2>
       <PortfolioHoldingsTable positions={snap.positions} />
+
+      <h2 className="mb-4 mt-10 text-sm font-semibold uppercase tracking-wide text-zinc-500">
+        Recent activity
+      </h2>
+      <RecentActivity trades={snap.recentTrades} />
 
       <div className="mt-10">
         <AddMarketPosition />

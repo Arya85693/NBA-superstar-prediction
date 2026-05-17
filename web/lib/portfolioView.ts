@@ -5,6 +5,8 @@ import {
   roundMoney,
   STARTING_CASH,
 } from "./portfolioStore";
+import { getPortfolioRealizedPnl, getRecentTrades } from "./tradeHistory";
+import type { RecentTradeRow } from "./tradeHistory";
 
 export type PositionRow = {
   player_id: number;
@@ -13,6 +15,9 @@ export type PositionRow = {
   value: number;
   name: string;
   team_abbr: string;
+  avgCostPerShare: number | null;
+  costBasis: number | null;
+  unrealizedPnl: number | null;
   /** Share of total portfolio value (cash + all positions), 0–100 */
   allocationPct: number;
 };
@@ -31,6 +36,10 @@ export type PortfolioSnapshot = {
   totalReturn: number;
   /** Percent gain/loss vs starting cash */
   totalReturnPct: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  totalPnl: number;
+  recentTrades: RecentTradeRow[];
 };
 
 /** Pass `authUserId` from Supabase Auth (`user.id`), or `null` for guest demo portfolio. */
@@ -38,10 +47,15 @@ export async function getPortfolioSnapshot(
   authUserId: string | null,
 ): Promise<PortfolioSnapshot> {
   const portfolioId = await getPortfolioIdForUser(authUserId);
-  const pf = await readPortfolio(portfolioId);
-  const quotes = await loadLatestQuotes(false);
+  const [pf, quotes, realizedPnl, recentTrades] = await Promise.all([
+    readPortfolio(portfolioId),
+    loadLatestQuotes(false),
+    getPortfolioRealizedPnl(portfolioId),
+    getRecentTrades(portfolioId, 15),
+  ]);
 
   let positionsValue = 0;
+  let unrealizedPnl = 0;
   const raw: Omit<PositionRow, "allocationPct">[] = [];
 
   for (const [pidStr, shares] of Object.entries(pf.positions)) {
@@ -50,6 +64,14 @@ export async function getPortfolioSnapshot(
     const q = quotes.get(pid);
     const price = q?.price_after_game ?? null;
     const value = price !== null ? roundMoney(price * shares) : 0;
+    const avgCostPerShare = pf.avgCostPerShare[pidStr] ?? null;
+    const costBasis =
+      avgCostPerShare !== null ? roundMoney(avgCostPerShare * shares) : null;
+    const positionUnrealized =
+      price !== null && avgCostPerShare !== null
+        ? roundMoney((price - avgCostPerShare) * shares)
+        : null;
+    if (positionUnrealized !== null) unrealizedPnl += positionUnrealized;
     positionsValue += value;
     raw.push({
       player_id: pid,
@@ -58,8 +80,14 @@ export async function getPortfolioSnapshot(
       value,
       name: q?.player_name ?? `#${pid}`,
       team_abbr: q?.team_abbr ?? "",
+      avgCostPerShare,
+      costBasis,
+      unrealizedPnl: positionUnrealized,
     });
   }
+
+  unrealizedPnl = roundMoney(unrealizedPnl);
+  const totalPnl = roundMoney(realizedPnl + unrealizedPnl);
 
   raw.sort((a, b) => b.value - a.value);
 
@@ -94,5 +122,9 @@ export async function getPortfolioSnapshot(
     equitiesPct,
     totalReturn,
     totalReturnPct,
+    realizedPnl,
+    unrealizedPnl,
+    totalPnl,
+    recentTrades,
   };
 }

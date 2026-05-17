@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
 import { usePortfolioCash } from "@/hooks/usePortfolioCash";
+import { formatSignedUsd, pnlTextClass } from "@/lib/portfolioPnl";
 import type { PositionRow } from "@/lib/portfolioView";
 
 function pct(n: number) {
@@ -83,13 +84,16 @@ export function PortfolioHoldingsTable({
         </p>
       )}
       <div className="overflow-x-auto rounded-2xl border border-zinc-800/90 shadow-sm shadow-black/20">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[1040px] text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-900/50 text-zinc-400">
               <th className="px-3 py-3">Player</th>
               <th className="px-3 py-3 text-right">Shares</th>
+              <th className="px-3 py-3 text-right">Avg cost</th>
+              <th className="px-3 py-3 text-right">Cost basis</th>
               <th className="px-3 py-3 text-right">Price</th>
               <th className="px-3 py-3 text-right">Value</th>
+              <th className="px-3 py-3 text-right">Unrealized P&amp;L</th>
               <th className="px-3 py-3 text-right">Portfolio %</th>
               <th className="px-3 py-3 text-right">Trade</th>
             </tr>
@@ -110,9 +114,28 @@ export function PortfolioHoldingsTable({
                   </td>
                   <td className="px-3 py-3 text-right font-mono">{p.shares}</td>
                   <td className="px-3 py-3 text-right font-mono text-zinc-400">
+                    {p.avgCostPerShare != null
+                      ? formatUsd(p.avgCostPerShare)
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono text-zinc-400">
+                    {p.costBasis != null ? formatUsd(p.costBasis) : "—"}
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono text-zinc-400">
                     {p.price != null ? formatUsd(p.price) : "—"}
                   </td>
                   <td className="px-3 py-3 text-right font-mono">{formatUsd(p.value)}</td>
+                  <td
+                    className={`px-3 py-3 text-right font-mono ${
+                      p.unrealizedPnl !== null
+                        ? pnlTextClass(p.unrealizedPnl)
+                        : "text-zinc-500"
+                    }`}
+                  >
+                    {p.unrealizedPnl !== null
+                      ? formatSignedUsd(p.unrealizedPnl)
+                      : "—"}
+                  </td>
                   <td className="px-3 py-3 text-right text-zinc-400">
                     {pct(p.allocationPct)}
                   </td>

@@ -10,6 +10,7 @@ export const PAPER_PORTFOLIO_ID =
 const DEFAULT: Portfolio = {
   cash: STARTING_CASH,
   positions: {},
+  avgCostPerShare: {},
 };
 
 export function roundMoney(n: number): number {
@@ -88,14 +89,18 @@ export async function readPortfolio(portfolioId: string): Promise<Portfolio> {
     if (insErr) {
       throw new Error(`Supabase portfolios seed: ${insErr.message}`);
     }
-    return { ...DEFAULT, positions: { ...DEFAULT.positions } };
+    return {
+      ...DEFAULT,
+      positions: { ...DEFAULT.positions },
+      avgCostPerShare: { ...DEFAULT.avgCostPerShare },
+    };
   }
 
   const cash = roundMoney(parseCash(row.cash));
 
   const { data: posRows, error: posErr } = await supabase
     .from("positions")
-    .select("player_id, shares")
+    .select("player_id, shares, avg_cost_per_share")
     .eq("portfolio_id", portfolioId);
 
   if (posErr) {
@@ -103,14 +108,25 @@ export async function readPortfolio(portfolioId: string): Promise<Portfolio> {
   }
 
   const positions: Record<string, number> = {};
+  const avgCostPerShare: Record<string, number | null> = {};
   for (const r of posRows ?? []) {
     const pid = Number(r.player_id);
     const shares = Math.floor(Number(r.shares));
     if (!Number.isFinite(pid) || pid <= 0 || !Number.isFinite(shares)) continue;
-    if (shares > 0) positions[String(pid)] = shares;
+    if (shares > 0) {
+      positions[String(pid)] = shares;
+      const rawAvg = r.avg_cost_per_share;
+      if (rawAvg === null || rawAvg === undefined) {
+        avgCostPerShare[String(pid)] = null;
+      } else {
+        const avg = Number(rawAvg);
+        avgCostPerShare[String(pid)] =
+          Number.isFinite(avg) && avg > 0 ? avg : null;
+      }
+    }
   }
 
-  return { cash, positions };
+  return { cash, positions, avgCostPerShare };
 }
 
 export async function writePortfolio(portfolioId: string, p: Portfolio): Promise<void> {
