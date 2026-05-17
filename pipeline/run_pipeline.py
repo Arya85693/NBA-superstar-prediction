@@ -2,11 +2,11 @@
 Run the NBA stock pipeline in the correct order (from repo root):
 
   python pipeline/run_pipeline.py              # use existing raw CSVs
-  python pipeline/run_pipeline.py --fetch      # refresh prior + current season (nba_api), then build
-  python pipeline/run_pipeline.py --fetch-balldontlie  # game logs (BALLDONTLIE_API_KEY; add --active for BDL ids)
-  python pipeline/run_pipeline.py --fetch-balldontlie --active  # recommended: BDL game logs + BDL active list
+  python pipeline/run_pipeline.py --fetch-balldontlie --active  # default production/local refresh (BALLDONTLIE)
+  python pipeline/run_pipeline.py --fetch-balldontlie  # BDL game logs only (add --active for BDL player ids)
+  python pipeline/run_pipeline.py --fetch      # deprecated: stats.nba.com via nba_api (local fallback only)
   python pipeline/run_pipeline.py --fetch --bootstrap-history
-  python pipeline/run_pipeline.py --active     # refresh active_players (nba static, or BDL if combined with --fetch-balldontlie)
+  python pipeline/run_pipeline.py --active     # refresh active_players (BDL or nba static, depending on fetch flags)
 
 Steps: raw (optional) -> data_cleaning -> game_score -> price_engine + validate_prices.
 """
@@ -23,16 +23,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run cleaning through prices in order.")
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument(
-        "--fetch",
-        action="store_true",
-        help="Re-download raw_game_logs.csv from nba_api before rebuilding prices.",
-    )
-    fetch_group.add_argument(
         "--fetch-balldontlie",
         action="store_true",
         help=(
-            "Re-download raw_game_logs.csv from BALLDONTLIE (All-Star+). "
-            "Set BALLDONTLIE_API_KEY. Player/team/game ids are BDL ids, not stats.nba.com."
+            "Primary: re-download raw_game_logs.csv from BALLDONTLIE (All-Star+). "
+            "Set BALLDONTLIE_API_KEY. Use with --active so player ids match game logs."
+        ),
+    )
+    fetch_group.add_argument(
+        "--fetch",
+        action="store_true",
+        help=(
+            "Deprecated local fallback: re-download raw_game_logs.csv from stats.nba.com via nba_api. "
+            "Do not mix with BALLDONTLIE ids in Supabase."
         ),
     )
     parser.add_argument(
