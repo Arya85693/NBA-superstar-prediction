@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -14,7 +15,7 @@ export default function LoginPage() {
 
 function LoginLoading() {
   return (
-    <div className="mx-auto max-w-md py-16 text-center text-sm text-zinc-500">
+    <div className="mx-auto max-w-md py-16 text-center text-sm text-muted">
       Loading…
     </div>
   );
@@ -82,37 +83,36 @@ function LoginForm() {
 
   return (
     <div className="mx-auto max-w-md">
-      <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500/90">
-          Account
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
+      <div className="mb-8 flex flex-col items-center text-center sm:items-start sm:text-left">
+        <BrandLogo size={48} showWordmark={false} className="mb-5" />
+        <p className="hs-eyebrow">Account</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
           Sign in
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Welcome back — use the same password you chose at sign-up (after confirming your email,
           if required).
         </p>
       </div>
 
       {confirmedEmail && (
-        <div className="mb-6 rounded-xl border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm leading-relaxed text-emerald-200/95">
+        <div className="mb-6 rounded-xl border border-accent/30 bg-accent-muted px-4 py-3 text-sm leading-relaxed text-accent-hover">
           Your email was confirmed. Please sign in below to continue.
         </div>
       )}
 
       {passwordReset && (
-        <div className="mb-6 rounded-xl border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm leading-relaxed text-emerald-200/95">
+        <div className="mb-6 rounded-xl border border-accent/30 bg-accent-muted px-4 py-3 text-sm leading-relaxed text-accent-hover">
           Your password was updated. Please sign in with your new password.
         </div>
       )}
 
       <form
         onSubmit={(e) => void onSubmit(e)}
-        className="space-y-4 rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-6 shadow-sm shadow-black/20"
+        className="space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-sm shadow-slate-900/5"
       >
         <div>
-          <label htmlFor="login-email" className="block text-xs font-medium text-zinc-400">
+          <label htmlFor="login-email" className="block text-xs font-medium text-muted-foreground">
             Email
           </label>
           <input
@@ -122,12 +122,12 @@ function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2"
+            className="mt-1.5 w-full rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground outline-none ring-accent/30 placeholder:text-muted focus:border-accent/80 focus:ring-2"
             placeholder="you@example.com"
           />
         </div>
         <div>
-          <label htmlFor="login-password" className="block text-xs font-medium text-zinc-400">
+          <label htmlFor="login-password" className="block text-xs font-medium text-muted-foreground">
             Password
           </label>
           <input
@@ -138,13 +138,13 @@ function LoginForm() {
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2"
+            className="mt-1.5 w-full rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground outline-none ring-accent/30 placeholder:text-muted focus:border-accent/80 focus:ring-2"
             placeholder="••••••••"
           />
           <div className="mt-2 text-right">
             <Link
               href="/forgot-password"
-              className="text-xs font-medium text-emerald-400/90 underline-offset-4 hover:text-emerald-300 hover:underline"
+              className="text-xs font-medium text-accent underline-offset-4 hover:text-accent-hover hover:underline"
             >
               Forgot password?
             </Link>
@@ -152,33 +152,33 @@ function LoginForm() {
         </div>
 
         {errorMessage && (
-          <p className="text-sm leading-relaxed text-rose-400/95">{errorMessage}</p>
+          <p className="text-sm leading-relaxed text-negative/95">{errorMessage}</p>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg border border-emerald-600/80 bg-emerald-950/50 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-950/80 disabled:cursor-not-allowed disabled:opacity-60"
+          className="hs-btn hs-btn-primary w-full disabled:cursor-not-allowed"
         >
           {loading ? "Working…" : "Sign in"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-500">
+      <p className="mt-6 text-center text-sm text-muted">
         Don&apos;t have an account?{" "}
         <Link
           href="/signup"
-          className="font-medium text-emerald-400/90 underline-offset-4 hover:text-emerald-300 hover:underline"
+          className="font-medium text-accent underline-offset-4 hover:text-accent-hover hover:underline"
         >
           Sign up
         </Link>
       </p>
 
-      <div className="mt-8 space-y-3 border-t border-zinc-800/90 pt-8 text-center">
+      <div className="mt-8 space-y-3 border-t border-border pt-8 text-center">
         <button
           type="button"
           disabled={loading}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-900/50 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+          className="hs-btn hs-btn-secondary w-full disabled:cursor-not-allowed"
           onClick={() => {
             void (async () => {
               setLoading(true);
@@ -193,7 +193,7 @@ function LoginForm() {
         >
           Continue without an account
         </button>
-        <p className="text-xs leading-relaxed text-zinc-600">
+        <p className="text-xs leading-relaxed text-muted">
           Uses the shared demo portfolio. Sign up later for your own wallet.
         </p>
       </div>

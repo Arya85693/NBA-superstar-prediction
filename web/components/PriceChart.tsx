@@ -1,18 +1,27 @@
 "use client";
 
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
-  type TooltipContentProps,
   XAxis,
   YAxis,
+  type TooltipContentProps,
 } from "recharts";
 import { formatUsd } from "@/lib/format";
+import {
+  CHART_ACCENT,
+  CHART_ACCENT_RGB,
+  chartColors,
+  chartLayout,
+  chartLegend,
+  chartTypography,
+} from "@/lib/chartTheme";
 
 export type ChartPoint = {
   date: string;
@@ -21,40 +30,35 @@ export type ChartPoint = {
   hadGame: boolean;
 };
 
+const GRADIENT_ID = "hs-price-area-fill";
+
 function PriceTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload as ChartPoint | undefined;
   if (!row) return null;
   return (
-    <div
-      className="rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2.5 shadow-xl"
-      style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.45)" }}
-    >
-      <p className="mb-2 text-xs font-semibold text-zinc-300">
+    <div className="rounded-lg border border-border/90 bg-surface-elevated px-3 py-2 shadow-sm">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-tight text-charcoal">
         {formatTooltipDate(row.date)}
       </p>
-      <p className="font-mono text-sm text-emerald-400">
+      <p className="font-mono text-sm tabular-nums text-foreground">
         {formatUsd(row.price)}{" "}
-        <span className="text-xs font-normal text-zinc-500">model price</span>
+        <span className="text-[11px] font-normal text-muted">model price</span>
       </p>
       {row.hadGame && row.gs != null ? (
-        <p className="mt-1 font-mono text-sm text-zinc-300">
+        <p className="mt-1 font-mono text-xs tabular-nums text-muted-foreground">
           GmSc {row.gs.toFixed(1)}{" "}
-          <span className="text-xs font-normal text-zinc-500">that game</span>
+          <span className="font-sans font-normal text-muted">that game</span>
         </p>
       ) : (
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-1 text-xs text-muted-foreground">
           No game logged{" "}
-          <span className="text-xs font-normal text-zinc-500">price carried forward</span>
+          <span className="text-muted">price carried forward</span>
         </p>
       )}
     </div>
   );
 }
-
-const TICK = { fill: "#a1a1aa", fontSize: 11 };
-const GRID = "#27272a";
-const AXIS_LINE = "#3f3f46";
 
 function formatAxisDate(iso: string) {
   const d = new Date(iso);
@@ -62,7 +66,6 @@ function formatAxisDate(iso: string) {
   return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
-    year: "numeric",
   });
 }
 
@@ -79,98 +82,122 @@ function formatTooltipDate(iso: string) {
 
 export function PriceChart({ points }: { points: ChartPoint[] }) {
   if (points.length === 0) {
-    return <p className="text-zinc-500">No history.</p>;
+    return <p className="text-sm text-muted">No history.</p>;
   }
 
-  const h = 320;
+  const { height, margin, yAxisWidth, strokeWidth, gridDash, gridOpacity } = chartLayout;
   const allSamePrice = points.every((point) => point.price === points[0]?.price);
+  const plotHeight = height - 8;
 
   return (
     <div
-      className="w-full min-w-0"
-      style={{ height: h, minHeight: h }}
+      className="hs-chart-shell w-full min-w-0"
+      style={{ height, minHeight: height }}
       role="img"
       aria-label="Player model price over time, carried forward by date"
     >
-      <ResponsiveContainer width="100%" height={h} debounce={50}>
-        <LineChart
-          data={points}
-          margin={{ top: 16, right: 10, left: 6, bottom: 12 }}
-        >
+      <ResponsiveContainer width="100%" height={plotHeight} debounce={50}>
+        <ComposedChart data={points} margin={margin}>
           <defs>
-            <linearGradient id="priceStroke" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#34d399" />
-              <stop offset="100%" stopColor="#6ee7b7" />
+            <linearGradient id={GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
+              <stop
+                offset="0%"
+                stopColor={`rgb(${CHART_ACCENT_RGB})`}
+                stopOpacity={chartLayout.areaFillTop}
+              />
+              <stop
+                offset="92%"
+                stopColor={`rgb(${CHART_ACCENT_RGB})`}
+                stopOpacity={chartLayout.areaFillBottom}
+              />
             </linearGradient>
           </defs>
           <CartesianGrid
-            stroke={GRID}
-            strokeDasharray="4 4"
+            stroke={chartColors.grid}
+            strokeDasharray={gridDash}
             vertical={false}
-            opacity={0.9}
+            opacity={gridOpacity}
           />
           <XAxis
             dataKey="date"
-            tick={TICK}
-            tickLine={{ stroke: AXIS_LINE }}
-            axisLine={{ stroke: AXIS_LINE }}
+            tick={chartTypography.tick}
+            tickLine={false}
+            axisLine={{ stroke: chartColors.axis, strokeWidth: 1 }}
             tickFormatter={formatAxisDate}
             interval="preserveStartEnd"
-            minTickGap={28}
+            minTickGap={32}
+            dy={4}
           />
           <YAxis
             domain={["auto", "auto"]}
-            tick={TICK}
-            tickLine={{ stroke: AXIS_LINE }}
-            axisLine={{ stroke: AXIS_LINE }}
-            width={54}
+            tick={chartTypography.tickMono}
+            tickLine={false}
+            axisLine={false}
+            width={yAxisWidth}
             tickFormatter={(v) =>
               typeof v === "number"
                 ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
                 : String(v)
             }
-            label={{
-              value: "Price",
-              angle: -90,
-              position: "insideLeft",
-              fill: "#a1a1aa",
-              fontSize: 11,
-              offset: 4,
-            }}
           />
           <Tooltip
-            cursor={{ stroke: "#52525b", strokeWidth: 1, strokeDasharray: "4 4" }}
+            cursor={{
+              stroke: chartColors.cursor,
+              strokeWidth: 1,
+              strokeDasharray: "3 4",
+            }}
             content={PriceTooltip}
           />
           {allSamePrice && (
             <ReferenceLine
               y={points[0]!.price}
-              stroke="#6ee7b7"
-              strokeOpacity={0.35}
-              strokeWidth={1.5}
+              stroke={CHART_ACCENT}
+              strokeOpacity={0.22}
+              strokeWidth={1}
+              strokeDasharray="4 6"
             />
           )}
           <Legend
-            wrapperStyle={{ paddingTop: 8, fontSize: 12 }}
-            iconType="line"
+            verticalAlign="top"
+            align="right"
+            height={22}
+            wrapperStyle={chartLegend.wrapperStyle}
+            iconSize={chartLegend.iconSize}
+            iconType="plainline"
             formatter={(value) => (
-              <span className="text-zinc-400">{String(value)}</span>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {String(value)}
+              </span>
             )}
           />
-          <Line
-            type="linear"
+          <Area
+            type="monotone"
             dataKey="price"
-            stroke="url(#priceStroke)"
-            strokeWidth={2.25}
+            stroke="none"
+            fill={`url(#${GRADIENT_ID})`}
+            isAnimationActive={false}
+            connectNulls
+            legendType="none"
+          />
+          <Line
+            type="monotone"
+            dataKey="price"
+            stroke={CHART_ACCENT}
+            strokeWidth={strokeWidth}
             dot={false}
-            activeDot={{ r: 6, fill: "#a7f3d0", stroke: "#047857", strokeWidth: 2 }}
+            activeDot={{
+              r: 3.5,
+              fill: CHART_ACCENT,
+              stroke: chartColors.surface,
+              strokeWidth: 2,
+            }}
             isAnimationActive={false}
             name="Model price"
             connectNulls
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

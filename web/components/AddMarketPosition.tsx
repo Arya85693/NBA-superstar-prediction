@@ -91,40 +91,40 @@ export function AddMarketPosition() {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800/90 bg-zinc-900/30 p-5 md:p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+    <div className="rounded-2xl border border-border bg-surface p-5 md:p-6">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
         Buy another player
       </h2>
-      <p className="mt-1 text-sm text-zinc-500">
+      <p className="mt-1 text-sm text-muted">
         Search the same market list and add a new position without leaving this page.
       </p>
 
-      <div className="mt-4 rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+      <div className="mt-4 rounded-lg border border-border bg-surface-muted px-3 py-2.5">
         <BuyingPower cash={cash} state={portfolioState} />
       </div>
 
       {loadErr && (
-        <p className="mt-3 text-sm text-rose-400">{loadErr}</p>
+        <p className="mt-3 text-sm text-negative">{loadErr}</p>
       )}
 
       {rows && (
         <div className="mt-5 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs text-zinc-500">Search</label>
+            <label className="mb-1.5 block text-xs text-muted">Search</label>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Name, team, or ticker (e.g. KIRV)…"
-              className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600"
+              className="w-full max-w-md rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs text-zinc-500">Pick a player</label>
-            <div className="max-h-48 overflow-y-auto rounded-lg border border-zinc-800">
+            <label className="mb-1.5 block text-xs text-muted">Pick a player</label>
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
               {filtered.length === 0 ? (
-                <p className="p-4 text-sm text-zinc-500">No matches.</p>
+                <p className="p-4 text-sm text-muted">No matches.</p>
               ) : (
-                <ul className="divide-y divide-zinc-800">
+                <ul className="divide-y divide-border">
                   {filtered.map((r) => {
                     const on = selectedId === r.player_id;
                     return (
@@ -137,20 +137,20 @@ export function AddMarketPosition() {
                           }}
                           className={
                             on
-                              ? "flex w-full items-center justify-between gap-2 bg-emerald-950/40 px-3 py-2.5 text-left text-sm"
-                              : "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-zinc-300 hover:bg-zinc-800/60"
+                              ? "flex w-full items-center justify-between gap-2 bg-accent-muted px-3 py-2.5 text-left text-sm"
+                              : "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-foreground hover:bg-surface-inset"
                           }
                         >
                           <span className="min-w-0">
-                            <span className="font-medium text-zinc-100">
+                            <span className="font-medium text-foreground">
                               {r.player_name}
                             </span>
-                            <span className="ml-2 text-zinc-500">{r.team_abbr}</span>
-                            <span className="ml-2 font-mono text-xs font-semibold text-emerald-500/90">
+                            <span className="ml-2 text-muted">{r.team_abbr}</span>
+                            <span className="ml-2 font-mono text-xs font-semibold text-accent">
                               {r.ticker}
                             </span>
                           </span>
-                          <span className="shrink-0 font-mono text-sm text-zinc-400">
+                          <span className="shrink-0 font-mono text-sm text-muted-foreground">
                             {formatUsd(r.price_after_game)}
                           </span>
                         </button>
@@ -163,22 +163,22 @@ export function AddMarketPosition() {
           </div>
 
           {selected && (
-            <div className="flex flex-col gap-3 border-t border-zinc-800 pt-4 sm:flex-row sm:items-end">
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end">
               <div>
-                <p className="text-xs text-zinc-500">Last model price / sh</p>
-                <p className="font-mono text-lg text-zinc-100">
+                <p className="text-xs text-muted">Last model price / sh</p>
+                <p className="font-mono text-lg text-foreground">
                   {formatUsd(selected.price_after_game)}
                 </p>
                 {portfolioState === "ok" && cash !== null && maxBuyShares !== null && (
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1 text-xs text-muted">
                     {maxBuyShares >= 1 ? (
                       <>
                         Up to{" "}
-                        <span className="font-mono text-zinc-400">{maxBuyShares}</span> share
+                        <span className="font-mono text-muted-foreground">{maxBuyShares}</span> share
                         {maxBuyShares === 1 ? "" : "s"} at this price.
                       </>
                     ) : (
-                      <span className="text-amber-200/90">
+                      <span className="text-warning/90">
                         Not enough buying power for one share.
                       </span>
                     )}
@@ -186,21 +186,21 @@ export function AddMarketPosition() {
                 )}
               </div>
               <div className="sm:ml-4">
-                <label className="mb-1.5 block text-xs text-zinc-500">Shares</label>
+                <label className="mb-1.5 block text-xs text-muted">Shares</label>
                 <input
                   type="number"
                   min={1}
                   step={1}
                   value={shares}
                   onChange={(e) => setShares(e.target.value)}
-                  className="w-24 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100"
+                  className="w-24 rounded-lg border border-border-strong bg-background px-3 py-2 font-mono text-sm text-foreground"
                 />
               </div>
               <button
                 type="button"
                 disabled={busy}
                 onClick={buy}
-                className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50 sm:ml-auto"
+                className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent disabled:opacity-50 sm:ml-auto"
               >
                 {busy ? "…" : "Buy"}
               </button>
@@ -208,7 +208,7 @@ export function AddMarketPosition() {
           )}
 
           {msg && (
-            <p className="text-sm text-zinc-400" role="status">
+            <p className="text-sm text-muted-foreground" role="status">
               {msg}
             </p>
           )}

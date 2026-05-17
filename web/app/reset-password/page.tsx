@@ -89,35 +89,35 @@ export default function ResetPasswordPage() {
   return (
     <div className="mx-auto max-w-md">
       <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500/90">
+        <p className="text-xs font-semibold uppercase tracking-wide text-accent">
           Account
         </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
           Choose a new password
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Set a new password for your account, then sign in again to continue.
         </p>
       </div>
 
       {linkStatus === "checking" && (
-        <div className="mb-6 rounded-xl border border-zinc-800/90 bg-zinc-900/40 px-4 py-3 text-sm leading-relaxed text-zinc-400">
+        <div className="mb-6 rounded-xl border border-border bg-surface px-4 py-3 text-sm leading-relaxed text-muted-foreground">
           Checking your reset link…
         </div>
       )}
 
       {linkStatus === "invalid" && (
-        <div className="mb-6 rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm leading-relaxed text-rose-200/95">
+        <div className="mb-6 rounded-xl border border-negative/20 bg-negative-muted px-4 py-3 text-sm leading-relaxed text-negative/95">
           This reset link is invalid or expired. Request a new one to try again.
         </div>
       )}
 
       <form
         onSubmit={(e) => void onSubmit(e)}
-        className="space-y-4 rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-6 shadow-sm shadow-black/20"
+        className="space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-sm shadow-slate-900/5"
       >
         <div>
-          <label htmlFor="reset-password" className="block text-xs font-medium text-zinc-400">
+          <label htmlFor="reset-password" className="block text-xs font-medium text-muted-foreground">
             New password
           </label>
           <input
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={formDisabled}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1.5 w-full rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground outline-none ring-accent/30 placeholder:text-muted focus:border-accent/80 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder="••••••••"
           />
         </div>
@@ -137,7 +137,7 @@ export default function ResetPasswordPage() {
         <div>
           <label
             htmlFor="reset-confirm-password"
-            className="block text-xs font-medium text-zinc-400"
+            className="block text-xs font-medium text-muted-foreground"
           >
             Confirm new password
           </label>
@@ -150,29 +150,29 @@ export default function ResetPasswordPage() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             disabled={formDisabled}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1.5 w-full rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground outline-none ring-accent/30 placeholder:text-muted focus:border-accent/80 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder="••••••••"
           />
         </div>
 
         {errorMessage && (
-          <p className="text-sm leading-relaxed text-rose-400/95">{errorMessage}</p>
+          <p className="text-sm leading-relaxed text-negative/95">{errorMessage}</p>
         )}
 
         <button
           type="submit"
           disabled={formDisabled}
-          className="w-full rounded-lg border border-emerald-600/80 bg-emerald-950/50 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-950/80 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-lg border border-accent/80 bg-accent-muted py-2.5 text-sm font-semibold text-accent-hover transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Working…" : "Update password"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-500">
+      <p className="mt-6 text-center text-sm text-muted">
         Need a new email?{" "}
         <Link
           href="/forgot-password"
-          className="font-medium text-emerald-400/90 underline-offset-4 hover:text-emerald-300 hover:underline"
+          className="font-medium text-accent underline-offset-4 hover:text-accent-hover hover:underline"
         >
           Request another reset link
         </Link>

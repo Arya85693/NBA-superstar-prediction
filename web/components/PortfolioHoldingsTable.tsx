@@ -66,8 +66,8 @@ export function PortfolioHoldingsTable({
 
   if (empty) {
     return (
-      <p className="rounded-2xl border border-zinc-800/90 bg-zinc-900/30 p-8 text-center text-sm text-zinc-500">
-        No positions yet. Use <strong className="text-zinc-400">Buy another player</strong>{" "}
+      <p className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-muted">
+        No positions yet. Use <strong className="text-muted-foreground">Buy another player</strong>{" "}
         below or open any player on the market.
       </p>
     );
@@ -75,18 +75,18 @@ export function PortfolioHoldingsTable({
 
   return (
     <div>
-      <div className="mb-3 rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+      <div className="mb-3 rounded-lg border border-border bg-surface-muted px-3 py-2.5">
         <BuyingPower cash={cash} state={portfolioState} />
       </div>
       {msg && (
-        <p className="mb-3 rounded-lg border border-rose-900/50 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+        <p className="mb-3 rounded-lg border border-negative/20 bg-negative-muted px-3 py-2 text-sm text-negative">
           {msg}
         </p>
       )}
-      <div className="overflow-x-auto rounded-2xl border border-zinc-800/90 shadow-sm shadow-black/20">
+      <div className="overflow-x-auto rounded-2xl border border-border shadow-sm shadow-slate-900/5">
         <table className="w-full min-w-[1040px] text-left text-sm">
           <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-900/50 text-zinc-400">
+            <tr className="border-b border-border bg-surface text-muted-foreground">
               <th className="px-3 py-3">Player</th>
               <th className="px-3 py-3 text-right">Shares</th>
               <th className="px-3 py-3 text-right">Avg cost</th>
@@ -98,30 +98,30 @@ export function PortfolioHoldingsTable({
               <th className="px-3 py-3 text-right">Trade</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-border">
             {positions.map((p) => {
               const busy = busyId === p.player_id;
               return (
-                <tr key={p.player_id} className="hover:bg-zinc-900/80">
+                <tr key={p.player_id} className="hover:bg-surface-muted">
                   <td className="px-3 py-3">
                     <Link
                       href={`/player/${p.player_id}`}
-                      className="font-medium text-emerald-400 hover:underline"
+                      className="font-medium text-positive hover:underline"
                     >
                       {p.name}
                     </Link>
-                    <span className="ml-2 text-zinc-600">{p.team_abbr}</span>
+                    <span className="ml-2 text-muted">{p.team_abbr}</span>
                   </td>
                   <td className="px-3 py-3 text-right font-mono">{p.shares}</td>
-                  <td className="px-3 py-3 text-right font-mono text-zinc-400">
+                  <td className="px-3 py-3 text-right font-mono text-muted-foreground">
                     {p.avgCostPerShare != null
                       ? formatUsd(p.avgCostPerShare)
                       : "—"}
                   </td>
-                  <td className="px-3 py-3 text-right font-mono text-zinc-400">
+                  <td className="px-3 py-3 text-right font-mono text-muted-foreground">
                     {p.costBasis != null ? formatUsd(p.costBasis) : "—"}
                   </td>
-                  <td className="px-3 py-3 text-right font-mono text-zinc-400">
+                  <td className="px-3 py-3 text-right font-mono text-muted-foreground">
                     {p.price != null ? formatUsd(p.price) : "—"}
                   </td>
                   <td className="px-3 py-3 text-right font-mono">{formatUsd(p.value)}</td>
@@ -129,14 +129,14 @@ export function PortfolioHoldingsTable({
                     className={`px-3 py-3 text-right font-mono ${
                       p.unrealizedPnl !== null
                         ? pnlTextClass(p.unrealizedPnl)
-                        : "text-zinc-500"
+                        : "text-muted"
                     }`}
                   >
                     {p.unrealizedPnl !== null
                       ? formatSignedUsd(p.unrealizedPnl)
                       : "—"}
                   </td>
-                  <td className="px-3 py-3 text-right text-zinc-400">
+                  <td className="px-3 py-3 text-right text-muted-foreground">
                     {pct(p.allocationPct)}
                   </td>
                   <td className="px-3 py-3">
@@ -152,14 +152,14 @@ export function PortfolioHoldingsTable({
                             [p.player_id]: e.target.value,
                           }))
                         }
-                        className="w-16 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-right font-mono text-xs text-zinc-100"
+                        className="w-16 rounded-md border border-border-strong bg-background px-2 py-1.5 text-right font-mono text-xs text-foreground"
                         aria-label={`Share quantity for ${p.name}`}
                       />
                       <button
                         type="button"
                         disabled={busy || p.price == null}
                         onClick={() => trade(p.player_id, "buy", p.shares)}
-                        className="rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                        className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent disabled:opacity-40"
                       >
                         Buy
                       </button>
@@ -167,7 +167,7 @@ export function PortfolioHoldingsTable({
                         type="button"
                         disabled={busy || p.shares < 1}
                         onClick={() => trade(p.player_id, "sell", p.shares)}
-                        className="rounded-md border border-zinc-600 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                        className="rounded-md border border-border-strong px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-surface-inset disabled:opacity-40"
                       >
                         Sell
                       </button>

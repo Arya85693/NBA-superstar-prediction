@@ -117,8 +117,8 @@ export function PlayerChartSection({
               onClick={() => setRange(key)}
               className={
                 on
-                  ? "rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
-                  : "rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                  ? "rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white"
+                  : "rounded-lg border border-border-strong bg-surface-muted px-3 py-1.5 text-sm text-muted-foreground hover:border-border-strong hover:text-foreground"
               }
             >
               {label}
@@ -127,16 +127,16 @@ export function PlayerChartSection({
         })}
       </div>
       {points.length === 0 ? (
-        <p className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-center text-sm text-zinc-500">
+        <p className="rounded-lg border border-border bg-surface px-4 py-6 text-center text-sm text-muted">
           No price history in this window. Try a longer range.
         </p>
       ) : (
         <>
-          <p className="mb-3 text-xs text-zinc-600">
+          <p className="mb-3 text-xs text-muted">
             Showing {points.length} day{points.length === 1 ? "" : "s"} · {gamesInWindow} game
             {gamesInWindow === 1 ? "" : "s"} in window · end date {points[points.length - 1]?.date}
           </p>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 pb-2 pt-4 shadow-inner shadow-black/20 sm:px-5">
+          <div className="hs-chart-frame rounded-xl border border-border/80 bg-surface px-2 pb-1 pt-3 sm:px-3">
             <PriceChart points={points} />
           </div>
         </>

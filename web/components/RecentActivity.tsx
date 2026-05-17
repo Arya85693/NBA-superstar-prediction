@@ -15,17 +15,17 @@ function realizedLabel(pnl: number | null): string {
 export function RecentActivity({ trades }: { trades: RecentTradeRow[] }) {
   if (trades.length === 0) {
     return (
-      <p className="rounded-2xl border border-zinc-800/90 bg-zinc-900/30 p-8 text-center text-sm text-zinc-500">
+      <p className="rounded-2xl border border-border bg-surface p-8 text-center text-sm text-muted">
         No trades yet.
       </p>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-zinc-800/90 shadow-sm shadow-black/20">
+    <div className="overflow-x-auto rounded-2xl border border-border shadow-sm shadow-slate-900/5">
       <table className="w-full min-w-[880px] text-left text-sm">
         <thead>
-          <tr className="border-b border-zinc-800 bg-zinc-900/50 text-zinc-400">
+          <tr className="border-b border-border bg-surface text-muted-foreground">
             <th className="px-3 py-3">Time</th>
             <th className="px-3 py-3">Side</th>
             <th className="px-3 py-3">Player</th>
@@ -35,18 +35,18 @@ export function RecentActivity({ trades }: { trades: RecentTradeRow[] }) {
             <th className="px-3 py-3 text-right">Realized P&amp;L</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800">
+        <tbody className="divide-y divide-border">
           {trades.map((t) => (
-            <tr key={t.id} className="hover:bg-zinc-900/80">
-              <td className="whitespace-nowrap px-3 py-3 text-zinc-400">
+            <tr key={t.id} className="hover:bg-surface-muted">
+              <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                 {formatTradeTime(t.createdAt)}
               </td>
               <td className="px-3 py-3">
                 <span
                   className={
                     t.side === "buy"
-                      ? "font-semibold uppercase text-emerald-400"
-                      : "font-semibold uppercase text-zinc-300"
+                      ? "font-semibold uppercase text-positive"
+                      : "font-semibold uppercase text-foreground"
                   }
                 >
                   {t.side}
@@ -55,16 +55,16 @@ export function RecentActivity({ trades }: { trades: RecentTradeRow[] }) {
               <td className="px-3 py-3">
                 <Link
                   href={`/player/${t.playerId}`}
-                  className="font-medium text-emerald-400 hover:underline"
+                  className="font-medium text-positive hover:underline"
                 >
                   {t.playerName}
                 </Link>
                 {t.teamAbbr ? (
-                  <span className="ml-2 text-zinc-600">{t.teamAbbr}</span>
+                  <span className="ml-2 text-muted">{t.teamAbbr}</span>
                 ) : null}
               </td>
               <td className="px-3 py-3 text-right font-mono">{t.shares}</td>
-              <td className="px-3 py-3 text-right font-mono text-zinc-400">
+              <td className="px-3 py-3 text-right font-mono text-muted-foreground">
                 {formatUsd(t.pricePerShare)}
               </td>
               <td className="px-3 py-3 text-right font-mono">
@@ -72,7 +72,7 @@ export function RecentActivity({ trades }: { trades: RecentTradeRow[] }) {
               </td>
               <td
                 className={`px-3 py-3 text-right font-mono ${
-                  t.realizedPnl !== null ? pnlTextClass(t.realizedPnl) : "text-zinc-500"
+                  t.realizedPnl !== null ? pnlTextClass(t.realizedPnl) : "text-muted"
                 }`}
               >
                 {realizedLabel(t.realizedPnl)}

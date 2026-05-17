@@ -1,8 +1,8 @@
 /** Green / red / neutral text for signed dollar amounts. */
 export function pnlTextClass(n: number): string {
-  if (n > 0) return "text-emerald-400";
-  if (n < 0) return "text-rose-400";
-  return "text-zinc-400";
+  if (n > 0) return "text-positive";
+  if (n < 0) return "text-negative";
+  return "text-muted-foreground";
 }
 
 export function formatSignedUsd(n: number): string {

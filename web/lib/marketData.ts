@@ -478,10 +478,44 @@ export async function getCurrentSeasonPlaySnapshot(): Promise<{
   }
 }
 
+async function getPricesRevisionInfo(): Promise<{
+  revision: number;
+  updatedAt: string | null;
+}> {
+  if (pricesFromSupabase()) {
+    try {
+      const supabase = createSupabaseServerClient();
+      const { data, error } = await supabase
+        .from("prices_snapshot_meta")
+        .select("revision, updated_at")
+        .eq("id", 1)
+        .maybeSingle();
+      if (error) throw error;
+      return {
+        revision: Number(data?.revision ?? 0),
+        updatedAt:
+          typeof data?.updated_at === "string" ? data.updated_at : null,
+      };
+    } catch {
+      return { revision: 0, updatedAt: null };
+    }
+  }
+  const path = pricesCsvPath();
+  if (!fs.existsSync(path)) {
+    return { revision: 0, updatedAt: null };
+  }
+  const st = fs.statSync(path);
+  return {
+    revision: st.mtimeMs,
+    updatedAt: new Date(st.mtimeMs).toISOString(),
+  };
+}
+
 export async function getMarketMeta(): Promise<MarketMeta> {
-  const [snapshot, bundle] = await Promise.all([
+  const [snapshot, bundle, revisionInfo] = await Promise.all([
     getCurrentSeasonPlaySnapshot(),
     loadPricesBundle().catch(() => null),
+    getPricesRevisionInfo(),
   ]);
 
   let lastGameDate: string | null = null;
@@ -496,6 +530,8 @@ export async function getMarketMeta(): Promise<MarketMeta> {
   return {
     current_dataset_season: snapshot.maxSeason,
     current_dataset_last_game_date: lastGameDate,
+    prices_revision: revisionInfo.revision,
+    data_updated_at: revisionInfo.updatedAt,
   };
 }
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { formatUsd } from "@/lib/format";
 import { GUEST_BROWSE_CLEAR_PATH } from "@/lib/guestBrowse";
 import { createSupabaseSessionBrowser } from "@/lib/supabase-session-browser";
@@ -22,7 +23,7 @@ const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: "/portfolio", label: "Portfolio", match: (p) => p === "/portfolio" },
   {
     href: "/how-it-works",
-    label: "How it works",
+    label: "Guide",
     match: (p) => p === "/how-it-works",
   },
 ];
@@ -142,18 +143,13 @@ export function Nav() {
   }, [path]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-800/90 bg-zinc-950/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-8">
-          <Link
-            href="/"
-            className="shrink-0 text-base font-semibold tracking-tight text-zinc-100"
-          >
-            <span className="text-zinc-400">Hoops</span> Stock Market
-          </Link>
+    <header className="hs-nav-shell sticky top-0 z-50 border-b border-border/70">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between md:px-8 md:py-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-10">
+          <BrandLogo size={40} />
           {!isAuthPage && (
             <nav
-              className="flex flex-wrap items-end gap-1 sm:gap-6"
+              className="flex flex-wrap items-center gap-0.5 rounded-xl border border-border/60 bg-surface-muted/70 p-1"
               aria-label="Main"
             >
               {tabs.map((t) => {
@@ -165,8 +161,8 @@ export function Nav() {
                     prefetch
                     className={
                       active
-                        ? "-mb-px border-b-2 border-emerald-500 px-2 pb-3 text-sm font-medium text-zinc-100"
-                        : "border-b-2 border-transparent px-2 pb-3 text-sm font-medium text-zinc-500 transition hover:text-zinc-300"
+                        ? "hs-nav-pill-active rounded-lg px-4 py-2 text-sm font-semibold transition"
+                        : "rounded-lg px-4 py-2 text-sm font-medium text-muted transition hover:bg-surface/80 hover:text-charcoal"
                     }
                   >
                     {t.label}
@@ -176,17 +172,17 @@ export function Nav() {
             </nav>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-4 gap-y-2 border-t border-zinc-800/80 pt-2 sm:border-t-0 sm:pt-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-5 gap-y-2 border-t border-border/60 pt-2 sm:border-t-0 sm:pt-0">
           <div className="flex items-center gap-2">
             {account === undefined && (
-              <span className="text-zinc-600" aria-hidden>
+              <span className="text-muted" aria-hidden>
                 …
               </span>
             )}
             {account === null && (
               <Link
                 href="/login"
-                className="px-2 text-sm font-medium text-emerald-400/90 transition hover:text-emerald-300"
+                className="text-sm font-medium text-accent transition hover:text-accent-hover"
               >
                 Log in
               </Link>
@@ -194,14 +190,14 @@ export function Nav() {
             {account && (
               <>
                 <span
-                  className="hidden max-w-[10rem] truncate text-xs text-zinc-500 sm:inline"
+                  className="hidden max-w-[10rem] truncate text-xs text-muted sm:inline"
                   title={account.email ?? undefined}
                 >
                   {account.email ?? "Signed in"}
                 </span>
                 <button
                   type="button"
-                  className="px-2 text-sm font-medium text-zinc-500 transition hover:text-rose-400"
+                  className="text-sm font-medium text-muted transition hover:text-negative"
                   onClick={() => {
                     void (async () => {
                       const supabase = createSupabaseSessionBrowser();
@@ -218,18 +214,18 @@ export function Nav() {
               </>
             )}
           </div>
-          <div className="text-right text-sm">
-            <div className="text-[10px] uppercase tracking-wide text-zinc-500">
-              Buying power
-            </div>
+          <div className="rounded-lg border border-border/80 bg-surface-elevated/95 px-3.5 py-2 text-right shadow-sm">
+            <div className="hs-label text-[10px]">Buying power</div>
             {portfolioFetch === "loading" && (
-              <div className="font-mono text-emerald-400/70">…</div>
+              <div className="hs-stat-value text-sm text-muted">…</div>
             )}
             {portfolioFetch === "ok" && pf && (
-              <div className="font-mono text-emerald-400">{formatUsd(pf.cash)}</div>
+              <div className="hs-stat-value text-sm font-medium text-foreground">
+                {formatUsd(pf.cash)}
+              </div>
             )}
             {portfolioFetch === "error" && (
-              <div className="max-w-[9rem] text-xs leading-snug text-zinc-500">
+              <div className="max-w-[9rem] text-xs leading-snug text-muted">
                 Couldn&apos;t load
               </div>
             )}

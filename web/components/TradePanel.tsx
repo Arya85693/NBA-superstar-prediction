@@ -52,40 +52,42 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-      <h3 className="mb-4 text-sm font-medium uppercase tracking-wide text-zinc-500">
+    <div className="hs-panel p-5 md:p-6">
+      <h3 className="hs-label mb-4">
         Paper trade — {playerName}
         {ticker && (
-          <span className="ml-2 font-mono text-emerald-500/90">· {ticker}</span>
+          <span className="ml-2 font-mono normal-case tracking-normal text-accent">
+            · {ticker}
+          </span>
         )}
       </h3>
-      <div className="mb-4 rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2.5">
+      <div className="mb-4 hs-inset px-3 py-2.5">
         <BuyingPower cash={cash} state={portfolioState} />
       </div>
-      <p className="mb-3 font-mono text-2xl text-zinc-100">
+      <p className="hs-stat-value mb-3 text-2xl text-foreground">
         {formatUsd(price)}
-        <span className="ml-2 text-sm font-sans text-zinc-500">/ sh</span>
+        <span className="ml-2 text-sm font-sans font-normal text-muted">/ sh</span>
       </p>
-      <label className="mb-2 block text-sm text-zinc-400">Shares (whole)</label>
+      <label className="mb-2 block text-sm text-muted-foreground">Shares (whole)</label>
       <input
         type="number"
         min={1}
         step={1}
         value={shares}
         onChange={(e) => setShares(e.target.value)}
-        className="mb-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-zinc-100"
+        className="hs-input mb-4 font-mono"
       />
-      <div className="mb-4 space-y-1 text-sm text-zinc-500">
+      <div className="mb-4 space-y-1 text-sm text-muted">
         <p>Est. {est}</p>
         {portfolioState === "ok" && cash !== null && maxBuyShares !== null && (
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted">
             {maxBuyShares >= 1 ? (
               <>
-                Up to <span className="font-mono text-zinc-400">{maxBuyShares}</span> share
+                Up to <span className="font-mono text-muted-foreground">{maxBuyShares}</span> share
                 {maxBuyShares === 1 ? "" : "s"} at this price.
               </>
             ) : (
-              <span className="text-amber-200/90">
+              <span className="text-warning/90">
                 Buying power below one share at {formatUsd(price)} / sh.
               </span>
             )}
@@ -97,7 +99,7 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
           type="button"
           disabled={busy}
           onClick={() => trade("buy")}
-          className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+          className="hs-btn hs-btn-primary flex-1 disabled:opacity-50"
         >
           Buy
         </button>
@@ -105,12 +107,12 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
           type="button"
           disabled={busy}
           onClick={() => trade("sell")}
-          className="flex-1 rounded-lg border border-zinc-600 py-2.5 text-sm font-semibold text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+          className="hs-btn hs-btn-secondary flex-1 disabled:opacity-50"
         >
           Sell
         </button>
       </div>
-      {msg && <p className="mt-3 text-sm text-zinc-400">{msg}</p>}
+      {msg && <p className="mt-3 text-sm text-muted-foreground">{msg}</p>}
     </div>
   );
 }

@@ -60,13 +60,13 @@ export default function SignupPage() {
   return (
     <div className="mx-auto max-w-md">
       <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500/90">
+        <p className="text-xs font-semibold uppercase tracking-wide text-accent">
           Account
         </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
           Create account
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Paper trading only — each account gets its own starter balance once you&apos;ve verified
           your email.
         </p>
@@ -74,10 +74,10 @@ export default function SignupPage() {
 
       <form
         onSubmit={(e) => void onSubmit(e)}
-        className="space-y-4 rounded-2xl border border-zinc-800/90 bg-zinc-900/40 p-6 shadow-sm shadow-black/20"
+        className="space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-sm shadow-slate-900/5"
       >
         <div>
-          <label htmlFor="signup-email" className="block text-xs font-medium text-zinc-400">
+          <label htmlFor="signup-email" className="block text-xs font-medium text-muted-foreground">
             Email
           </label>
           <input
@@ -87,12 +87,12 @@ export default function SignupPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2"
+            className="mt-1.5 w-full rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground outline-none ring-accent/30 placeholder:text-muted focus:border-accent/80 focus:ring-2"
             placeholder="you@example.com"
           />
         </div>
         <div>
-          <label htmlFor="signup-password" className="block text-xs font-medium text-zinc-400">
+          <label htmlFor="signup-password" className="block text-xs font-medium text-muted-foreground">
             Password
           </label>
           <input
@@ -103,15 +103,15 @@ export default function SignupPage() {
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none ring-emerald-500/40 placeholder:text-zinc-600 focus:border-emerald-600/80 focus:ring-2"
+            className="mt-1.5 w-full rounded-lg border border-border-strong bg-background px-3 py-2 text-sm text-foreground outline-none ring-accent/30 placeholder:text-muted focus:border-accent/80 focus:ring-2"
             placeholder="••••••••"
           />
-          <p className="mt-1 text-xs text-zinc-600">At least 6 characters.</p>
+          <p className="mt-1 text-xs text-muted">At least 6 characters.</p>
         </div>
 
         {message && (
           <p
-            className={`text-sm leading-relaxed ${success ? "text-emerald-400/95" : "text-rose-400/95"}`}
+            className={`text-sm leading-relaxed ${success ? "text-positive" : "text-negative/95"}`}
           >
             {message}
           </p>
@@ -120,17 +120,17 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg border border-emerald-600/80 bg-emerald-950/50 py-2.5 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-950/80 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-lg border border-accent/80 bg-accent-muted py-2.5 text-sm font-semibold text-accent-hover transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Working…" : "Sign up"}
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-zinc-500">
+      <p className="mt-6 text-center text-sm text-muted">
         Already have an account?{" "}
         <Link
           href="/login"
-          className="font-medium text-emerald-400/90 underline-offset-4 hover:text-emerald-300 hover:underline"
+          className="font-medium text-accent underline-offset-4 hover:text-accent-hover hover:underline"
         >
           Sign in
         </Link>

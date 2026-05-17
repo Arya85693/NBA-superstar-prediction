@@ -24,6 +24,10 @@ export type MarketRow = PriceRow & {
 export type MarketMeta = {
   current_dataset_season: string | null;
   current_dataset_last_game_date?: string | null;
+  /** Supabase revision or local CSV mtimeMs — cache-bust key for prices data */
+  prices_revision?: number;
+  /** When prices were last written (Supabase updated_at or CSV mtime) */
+  data_updated_at?: string | null;
 };
 
 export type Portfolio = {
