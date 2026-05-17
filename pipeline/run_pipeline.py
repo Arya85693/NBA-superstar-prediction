@@ -59,14 +59,14 @@ def main() -> None:
     root = Path(__file__).resolve().parent.parent
 
     if args.fetch or args.fetch_balldontlie:
-        import data_collection as dc
+        import season_window as sw
 
         if args.start_year is None and args.end_year is None:
             if args.bootstrap_history:
-                start_year = dc.DEFAULT_BOOTSTRAP_START_SEASON_START_YEAR
-                end_year = dc.inferred_current_season_start_year()
+                start_year = sw.DEFAULT_BOOTSTRAP_START_SEASON_START_YEAR
+                end_year = sw.inferred_current_season_start_year()
             else:
-                start_year, end_year = dc.automated_window_season_years()
+                start_year, end_year = sw.automated_window_season_years()
         elif args.start_year is None or args.end_year is None:
             parser.error("--start-year and --end-year must be provided together.")
         else:
@@ -75,10 +75,10 @@ def main() -> None:
         if start_year > end_year:
             parser.error("--start-year must be <= --end-year.")
 
-        dc.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        sw.DATA_DIR.mkdir(parents=True, exist_ok=True)
         print(
             "Fetch window:",
-            dc.describe_season_window(start_year, end_year),
+            sw.describe_season_window(start_year, end_year),
         )
 
         if args.fetch_balldontlie:
@@ -86,13 +86,15 @@ def main() -> None:
 
             print("Fetching raw game logs (BALLDONTLIE)…")
             games_df = bdl.collect_player_game_logs(start_year=start_year, end_year=end_year)
-            out_games = dc.DATA_DIR / "raw_game_logs.csv"
+            out_games = sw.DATA_DIR / "raw_game_logs.csv"
             games_df.to_csv(out_games, index=False)
             print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
         else:
+            import data_collection as dc
+
             print("Fetching raw game logs (nba_api)...")
             games_df = dc.collect_player_game_logs(start_year=start_year, end_year=end_year)
-            out_games = dc.DATA_DIR / "raw_game_logs.csv"
+            out_games = sw.DATA_DIR / "raw_game_logs.csv"
             games_df.to_csv(out_games, index=False)
             print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
 

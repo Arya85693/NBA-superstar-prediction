@@ -37,10 +37,10 @@ from typing import Any
 
 import pandas as pd
 
-import data_collection as dc
+import season_window as sw
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
+ROOT = sw.ROOT
+DATA_DIR = sw.DATA_DIR
 
 
 def _env_float(name: str, default: float) -> float:
@@ -301,7 +301,7 @@ def collect_player_game_logs(
     from `game.postseason`).
     """
     if start_year is None or end_year is None:
-        start_year, end_year = dc.automated_window_season_years()
+        start_year, end_year = sw.automated_window_season_years()
 
     teams_map = fetch_teams_map()
     per_page = max(1, min(100, _env_int("BALLDONTLIE_PER_PAGE", 100)))
@@ -310,7 +310,7 @@ def collect_player_game_logs(
     for y in range(start_year, end_year + 1):
         print(
             f"BALLDONTLIE: fetching stats for season start year {y} "
-            f"({dc.describe_season_window(y, y)}) …",
+            f"({sw.describe_season_window(y, y)}) …",
         )
         cursor: int | None = None
         page = 0
@@ -409,7 +409,7 @@ def save_active_players_bdl(out_path: Path | None = None) -> Path:
 
 if __name__ == "__main__":
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print("Window:", dc.describe_season_window(*dc.automated_window_season_years()))
+    print("Window:", sw.describe_season_window(*sw.automated_window_season_years()))
     df = collect_player_game_logs()
     out = DATA_DIR / "raw_game_logs.csv"
     df.to_csv(out, index=False)

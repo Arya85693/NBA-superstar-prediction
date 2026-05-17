@@ -8,49 +8,31 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import date
-from pathlib import Path
 from typing import Callable
 
 import pandas as pd
 from nba_api.stats.endpoints import leaguegamelog
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
+from season_window import (
+    DATA_DIR,
+    DEFAULT_END_SEASON_START_YEAR,
+    DEFAULT_START_SEASON_START_YEAR,
+    ROOT,
+    describe_season_window,
+    season_string,
+)
 
-# Default scheduled fetch window = current season + prior season.
-# Historical bootstrap remains available explicitly via run_pipeline.py --bootstrap-history.
-DEFAULT_BOOTSTRAP_START_SEASON_START_YEAR = 2018
+# Re-export season helpers for callers that import data_collection.
+from season_window import (  # noqa: F401
+    DEFAULT_BOOTSTRAP_START_SEASON_START_YEAR,
+    automated_window_season_years,
+    inferred_current_season_start_year,
+)
 
 NBA_API_TIMEOUT_SECONDS = int(os.environ.get("NBA_API_TIMEOUT_SECONDS", "90"))
 NBA_API_MAX_ATTEMPTS = int(os.environ.get("NBA_API_MAX_ATTEMPTS", "3"))
 NBA_API_REQUEST_PAUSE_SECONDS = float(os.environ.get("NBA_API_REQUEST_PAUSE_SECONDS", "1"))
 NBA_API_RETRY_BACKOFF_SECONDS = float(os.environ.get("NBA_API_RETRY_BACKOFF_SECONDS", "5"))
-
-
-def _season_string(start_year: int) -> str:
-    return f"{start_year}-{str(start_year + 1)[-2:]}"
-
-
-def inferred_current_season_start_year(today: date | None = None) -> int:
-    """
-    NBA seasons usually roll in September/October and finish the following June.
-    July/August still belong to the most recently completed season for update purposes.
-    """
-    now = today or date.today()
-    return now.year if now.month >= 9 else now.year - 1
-
-
-def automated_window_season_years(today: date | None = None) -> tuple[int, int]:
-    current = inferred_current_season_start_year(today)
-    return current - 1, current
-
-
-DEFAULT_START_SEASON_START_YEAR, DEFAULT_END_SEASON_START_YEAR = automated_window_season_years()
-
-
-def describe_season_window(start_year: int, end_year: int) -> str:
-    return ", ".join(_season_string(year) for year in range(start_year, end_year + 1))
 
 
 def _fetch_with_retries(
@@ -82,7 +64,7 @@ def collect_player_game_logs(
     frames = []
     season_types = ("Regular Season", "Playoffs")
     for year in range(start_year, end_year + 1):
-        season = _season_string(year)
+        season = season_string(year)
         for season_type in season_types:
             print(f"Fetching player game logs for {season} ({season_type})...")
             df = _fetch_with_retries(
