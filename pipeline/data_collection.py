@@ -1,8 +1,7 @@
 """
-Collect raw NBA data for the player stock market pipeline.
+Collect raw NBA game logs for the player stock market pipeline (nba_api / stats.nba.com).
 
-Writes two datasets under data/:
-  - raw_season_player_stats.csv — league per-season aggregates (LeagueDashPlayerStats)
+Writes:
   - raw_game_logs.csv — every player-game row for pricing after each game (LeagueGameLog, player scope)
 """
 from __future__ import annotations
@@ -14,7 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 import pandas as pd
-from nba_api.stats.endpoints import leaguedashplayerstats, leaguegamelog
+from nba_api.stats.endpoints import leaguegamelog
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
@@ -75,33 +74,6 @@ def _fetch_with_retries(
     return None
 
 
-def collect_season_player_stats(
-    start_year: int = DEFAULT_START_SEASON_START_YEAR,
-    end_year: int = DEFAULT_END_SEASON_START_YEAR,
-) -> pd.DataFrame:
-    """Per-season league player totals / per-game averages (one row per player-season)."""
-    frames = []
-    for year in range(start_year, end_year + 1):
-        season = _season_string(year)
-        print(f"Fetching season player stats for {season}...")
-        df = _fetch_with_retries(
-            f"season player stats {season}",
-            lambda timeout: leaguedashplayerstats.LeagueDashPlayerStats(
-                season=season,
-                per_mode_detailed="PerGame",
-                timeout=timeout,
-            ).get_data_frames()[0],
-        )
-        if df is None or df.empty:
-            continue
-        df["SEASON"] = season
-        frames.append(df)
-
-    if not frames:
-        return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
-
-
 def collect_player_game_logs(
     start_year: int = DEFAULT_START_SEASON_START_YEAR,
     end_year: int = DEFAULT_END_SEASON_START_YEAR,
@@ -146,11 +118,6 @@ if __name__ == "__main__":
             DEFAULT_END_SEASON_START_YEAR,
         ),
     )
-
-    season_df = collect_season_player_stats()
-    out_season = DATA_DIR / "raw_season_player_stats.csv"
-    season_df.to_csv(out_season, index=False)
-    print(f"Saved {season_df.shape} -> {out_season.relative_to(ROOT)}")
 
     games_df = collect_player_game_logs()
     out_games = DATA_DIR / "raw_game_logs.csv"

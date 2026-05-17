@@ -1,12 +1,10 @@
 """
-Clean raw NBA exports for modeling and downstream pricing.
+Clean raw NBA game logs for modeling and downstream pricing.
 
 Reads:
-  data/raw_season_player_stats.csv
   data/raw_game_logs.csv
 
 Writes:
-  data/cleaned_season_player_stats.csv
   data/cleaned_game_logs.csv
 
 Full history keeps everyone who appears in the raw export (no minutes cutoff). For the
@@ -18,68 +16,6 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-
-
-def clean_season_player_stats() -> pd.DataFrame:
-    path = DATA_DIR / "raw_season_player_stats.csv"
-    if not path.exists():
-        legacy = DATA_DIR / "raw_player_stats.csv"
-        if legacy.exists():
-            path = legacy
-            print("Using legacy raw_player_stats.csv; run data_collection.py for raw_season_player_stats.csv")
-    if not path.exists():
-        print("Skipping season stats: no raw season CSV found (run data_collection.py).")
-        return pd.DataFrame()
-    df = pd.read_csv(path)
-
-    cols_to_keep = [
-        "PLAYER_ID",
-        "PLAYER_NAME",
-        "SEASON",
-        "TEAM_ID",
-        "AGE",
-        "GP",
-        "MIN",
-        "PTS",
-        "AST",
-        "REB",
-        "STL",
-        "BLK",
-        "TOV",
-        "FG_PCT",
-        "FG3_PCT",
-        "FT_PCT",
-        "PLUS_MINUS",
-    ]
-    df = df[cols_to_keep]
-    df = df.rename(
-        columns={
-            "PLAYER_ID": "player_id",
-            "PLAYER_NAME": "player_name",
-            "SEASON": "season",
-            "TEAM_ID": "team_id",
-            "AGE": "age",
-            "GP": "games_played",
-            "MIN": "minutes_per_game",
-            "PTS": "points_per_game",
-            "AST": "assists_per_game",
-            "REB": "rebounds_per_game",
-            "STL": "steals_per_game",
-            "BLK": "blocks_per_game",
-            "TOV": "turnovers_per_game",
-            "FG_PCT": "fg_pct",
-            "FG3_PCT": "fg3_pct",
-            "FT_PCT": "ft_pct",
-            "PLUS_MINUS": "plus_minus",
-        }
-    )
-    df = df.dropna()
-    df = df.sort_values(by=["player_id", "season"])
-
-    out = DATA_DIR / "cleaned_season_player_stats.csv"
-    df.to_csv(out, index=False)
-    print("cleaned_season_player_stats:", df.shape, "->", out.relative_to(ROOT))
-    return df
 
 
 def clean_game_logs() -> pd.DataFrame:
@@ -172,5 +108,4 @@ def clean_game_logs() -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    clean_season_player_stats()
     clean_game_logs()

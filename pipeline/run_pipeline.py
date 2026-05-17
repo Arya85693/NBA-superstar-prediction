@@ -25,7 +25,7 @@ def main() -> None:
     fetch_group.add_argument(
         "--fetch",
         action="store_true",
-        help="Re-download raw season/game data from nba_api before rebuilding prices.",
+        help="Re-download raw_game_logs.csv from nba_api before rebuilding prices.",
     )
     fetch_group.add_argument(
         "--fetch-balldontlie",
@@ -90,13 +90,7 @@ def main() -> None:
             games_df.to_csv(out_games, index=False)
             print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
         else:
-            print("Fetching raw season player stats...")
-            season_df = dc.collect_season_player_stats(start_year=start_year, end_year=end_year)
-            out_season = dc.DATA_DIR / "raw_season_player_stats.csv"
-            season_df.to_csv(out_season, index=False)
-            print(f"Saved {season_df.shape} -> {out_season.relative_to(root)}")
-
-            print("Fetching raw game logs...")
+            print("Fetching raw game logs (nba_api)...")
             games_df = dc.collect_player_game_logs(start_year=start_year, end_year=end_year)
             out_games = dc.DATA_DIR / "raw_game_logs.csv"
             games_df.to_csv(out_games, index=False)
@@ -104,8 +98,7 @@ def main() -> None:
 
     import data_cleaning
 
-    print("Cleaning season stats and game logs...")
-    data_cleaning.clean_season_player_stats()
+    print("Cleaning game logs...")
     data_cleaning.clean_game_logs()
 
     from game_score import DATA_DIR as GS_DIR, add_hollinger_game_score

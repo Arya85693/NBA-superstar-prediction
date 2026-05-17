@@ -41,7 +41,7 @@ market. Use `--bootstrap-history` only when you intentionally want a deeper rebu
 
 ## Data flow
 
-1. **Raw** (`data/raw_*.csv`) — game logs (and optional season stats from nba_api `--fetch`)  
+1. **Raw** (`data/raw_game_logs.csv`) — per-game box scores (BALLDONTLIE or nba_api `--fetch`)  
 2. **Cleaned** — standardized columns  
 3. **Game score** — `data/cleaned_game_logs_with_game_score.csv`  
 4. **Prices** — `data/player_game_prices.csv`
