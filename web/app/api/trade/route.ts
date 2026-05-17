@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { getLatestForPlayer } from "@/lib/marketData";
-import {
-  getPortfolioIdForUser,
-  readPortfolio,
-  roundMoney,
-  writePortfolio,
-} from "@/lib/portfolioStore";
+import { getPortfolioIdForUser } from "@/lib/portfolioStore";
+import { createSupabaseServiceRoleClient } from "@/lib/supabase";
 import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +11,69 @@ type Body = {
   side: "buy" | "sell";
   shares: number;
 };
+
+type PaperTradeResult = {
+  ok: boolean;
+  trade_id: string;
+  side: "buy" | "sell";
+  player_id: number;
+  shares: number;
+  filled_at_price: number;
+  gross_amount: number;
+  realized_pnl: number | null;
+  avg_cost_before: number | null;
+  avg_cost_after: number | null;
+  cash_after: number;
+  position_after: number;
+};
+
+function asNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function parseRpcHint(hint: string | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!hint) return out;
+  for (const part of hint.split(/\s+/)) {
+    const m = /^(\w+)=(.+)$/.exec(part.trim());
+    if (!m) continue;
+    const n = asNumber(m[2]);
+    if (n !== null) out[m[1]] = n;
+  }
+  return out;
+}
+
+function tradeErrorResponse(message: string, hint: string | null | undefined) {
+  const parsed = parseRpcHint(hint);
+  if (message.includes("Insufficient cash")) {
+    return NextResponse.json(
+      {
+        error: "Insufficient cash",
+        ...(parsed.cash !== undefined ? { cash: parsed.cash } : {}),
+        ...(parsed.required !== undefined ? { required: parsed.required } : {}),
+      },
+      { status: 400 },
+    );
+  }
+  if (message.includes("Insufficient shares")) {
+    return NextResponse.json(
+      {
+        error: "Insufficient shares",
+        ...(parsed.held !== undefined ? { held: parsed.held } : {}),
+      },
+      { status: 400 },
+    );
+  }
+  if (message.includes("Portfolio not found")) {
+    return NextResponse.json({ error: "Portfolio not found" }, { status: 404 });
+  }
+  return NextResponse.json({ error: message || "Trade failed" }, { status: 500 });
+}
 
 export async function POST(req: Request) {
   let body: Body;
@@ -47,7 +106,6 @@ export async function POST(req: Request) {
   }
 
   const price = quote.price_after_game;
-  const gross = roundMoney(price * shares);
 
   const supabaseAuth = await createSupabaseSessionServer();
   const {
@@ -55,40 +113,47 @@ export async function POST(req: Request) {
   } = await supabaseAuth.auth.getUser();
   const portfolioId = await getPortfolioIdForUser(user?.id ?? null);
 
-  const pf = await readPortfolio(portfolioId);
-  const key = String(playerId);
-  const held = pf.positions[key] ?? 0;
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase.rpc("execute_paper_trade", {
+    p_portfolio_id: portfolioId,
+    p_player_id: playerId,
+    p_side: side,
+    p_shares: shares,
+    p_price: price,
+  });
 
-  if (side === "buy") {
-    if (pf.cash + 1e-9 < gross) {
-      return NextResponse.json(
-        { error: "Insufficient cash", cash: pf.cash, required: gross },
-        { status: 400 },
-      );
-    }
-    pf.cash = roundMoney(pf.cash - gross);
-    pf.positions[key] = held + shares;
-  } else {
-    if (held + 1e-9 < shares) {
-      return NextResponse.json(
-        { error: "Insufficient shares", held },
-        { status: 400 },
-      );
-    }
-    pf.cash = roundMoney(pf.cash + gross);
-    const next = held - shares;
-    if (next <= 0) delete pf.positions[key];
-    else pf.positions[key] = next;
+  if (error) {
+    return tradeErrorResponse(error.message, error.hint);
   }
 
-  await writePortfolio(portfolioId, pf);
+  const raw = data as Record<string, unknown> | null;
+  if (!raw || raw.ok !== true) {
+    return NextResponse.json({ error: "Trade failed" }, { status: 500 });
+  }
 
-  return NextResponse.json({
+  const result: PaperTradeResult = {
     ok: true,
-    filled_at_price: price,
-    shares,
-    side,
-    cash_after: pf.cash,
-    position_after: pf.positions[key] ?? 0,
-  });
+    trade_id: String(raw.trade_id),
+    side: raw.side === "sell" ? "sell" : "buy",
+    player_id: asNumber(raw.player_id) ?? playerId,
+    shares: asNumber(raw.shares) ?? shares,
+    filled_at_price: asNumber(raw.filled_at_price) ?? price,
+    gross_amount: asNumber(raw.gross_amount) ?? 0,
+    realized_pnl:
+      raw.realized_pnl === null || raw.realized_pnl === undefined
+        ? null
+        : asNumber(raw.realized_pnl),
+    avg_cost_before:
+      raw.avg_cost_before === null || raw.avg_cost_before === undefined
+        ? null
+        : asNumber(raw.avg_cost_before),
+    avg_cost_after:
+      raw.avg_cost_after === null || raw.avg_cost_after === undefined
+        ? null
+        : asNumber(raw.avg_cost_after),
+    cash_after: asNumber(raw.cash_after) ?? 0,
+    position_after: asNumber(raw.position_after) ?? 0,
+  };
+
+  return NextResponse.json(result);
 }
