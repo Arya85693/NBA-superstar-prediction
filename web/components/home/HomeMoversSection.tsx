@@ -79,7 +79,7 @@ function MoversPanel({
         <ul className="divide-y divide-border/60">
           {movers.map((m, i) => (
             <li key={m.player_id}>
-              <MoverRow mover={m} rank={i + 1} direction={direction} />
+              <MoverRow mover={m} rank={i + 1} direction={direction} showSparkline={false} />
             </li>
           ))}
         </ul>
