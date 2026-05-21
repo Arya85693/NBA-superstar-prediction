@@ -32,6 +32,10 @@ export const metadata = {
 
   title: "Portfolio",
 
+  description: "Your paper trading account — cash, holdings, and trade history.",
+
+  robots: { index: false, follow: false },
+
 };
 
 

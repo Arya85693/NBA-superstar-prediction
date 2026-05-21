@@ -111,7 +111,10 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await supabaseAuth.auth.getUser();
-  const portfolioId = await getPortfolioIdForUser(user?.id ?? null);
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+  const portfolioId = await getPortfolioIdForUser(user.id);
 
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase.rpc("execute_paper_trade", {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BrandLogo } from "@/components/BrandLogo";
+import { safeReturnPath, signupHref } from "@/lib/authRedirect";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -26,6 +27,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const confirmedEmail = searchParams.get("confirmed") === "1";
   const passwordReset = searchParams.get("reset") === "1";
+  const afterLogin = safeReturnPath(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +41,7 @@ function LoginForm() {
       .then((r) => r.json() as Promise<{ user: { id: string } | null }>)
       .then((data) => {
         if (cancelled || !data.user) return;
-        window.location.assign("/");
+        window.location.assign(afterLogin);
       })
       .catch(() => {
         /* stay on the page if auth status couldn't be checked */
@@ -48,7 +50,7 @@ function LoginForm() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [afterLogin]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,7 +75,7 @@ function LoginForm() {
       }
 
       router.refresh();
-      window.location.assign("/");
+      window.location.assign(afterLogin);
     } catch {
       setErrorMessage("Network error - try again.");
     } finally {
@@ -93,6 +95,12 @@ function LoginForm() {
           Welcome back - use the same password you chose at sign-up (after confirming your email,
           if required).
         </p>
+        {afterLogin !== "/" && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            After sign-in you&apos;ll return to{" "}
+            <span className="font-mono text-xs text-foreground">{afterLogin}</span>.
+          </p>
+        )}
       </div>
 
       {confirmedEmail && (
@@ -167,7 +175,7 @@ function LoginForm() {
       <p className="mt-6 text-center text-sm text-muted">
         Don&apos;t have an account?{" "}
         <Link
-          href="/signup"
+          href={signupHref(afterLogin)}
           className="font-medium text-accent underline-offset-4 hover:text-accent-hover hover:underline"
         >
           Sign up
@@ -175,26 +183,15 @@ function LoginForm() {
       </p>
 
       <div className="mt-8 space-y-3 border-t border-border pt-8 text-center">
-        <button
-          type="button"
-          disabled={loading}
-          className="hs-btn hs-btn-secondary w-full disabled:cursor-not-allowed"
-          onClick={() => {
-            void (async () => {
-              setLoading(true);
-              try {
-                await fetch("/api/auth/guest", { method: "POST" });
-                window.location.assign("/");
-              } finally {
-                setLoading(false);
-              }
-            })();
-          }}
+        <Link
+          href="/market"
+          className="hs-btn hs-btn-secondary inline-flex w-full justify-center"
         >
-          Continue without an account
-        </button>
+          Browse the market without signing in
+        </Link>
         <p className="text-xs leading-relaxed text-muted">
-          Uses the shared demo portfolio. Sign up later for your own wallet.
+          Explore prices, charts, and the guide for free. Sign in when you want your own paper
+          portfolio.
         </p>
       </div>
     </div>

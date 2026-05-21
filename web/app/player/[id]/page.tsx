@@ -30,7 +30,15 @@ export async function generateMetadata({
   if (!Number.isFinite(playerId)) return { title: "Player" };
   const quote = await latestForPlayer(playerId);
   if (!quote) return { title: "Player" };
-  return { title: quote.player_name };
+  const price = quote.price_after_game;
+  const title = `${quote.player_name} · ${quote.team_abbr} stock`;
+  const description = `Model price ${price.toFixed(2)} for ${quote.player_name} (${quote.team_abbr}). View price history, game score trends, and paper trade on Hoops Stock Market.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/player/${playerId}` },
+    openGraph: { title, description },
+  };
 }
 
 export default async function PlayerPage({

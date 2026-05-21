@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { GUEST_BROWSE_COOKIE } from "@/lib/guestBrowse";
+import { loginHref } from "@/lib/authRedirect";
 
 function copyAuthCookies(from: NextResponse, to: NextResponse) {
   for (const c of from.cookies.getAll()) {
@@ -47,16 +47,12 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const guestOk = request.cookies.get(GUEST_BROWSE_COOKIE)?.value === "1";
 
-  if (
-    path === "/" &&
-    !user &&
-    !guestOk &&
-    /** Allow prefetch / RSC payloads to resolve without looping */
-    request.method === "GET"
-  ) {
-    const redirect = NextResponse.redirect(new URL("/login", request.url));
+  if (path === "/portfolio" && !user && request.method === "GET") {
+    const returnPath = `${path}${request.nextUrl.search}`;
+    const redirect = NextResponse.redirect(
+      new URL(loginHref(returnPath), request.url),
+    );
     copyAuthCookies(supabaseResponse, redirect);
     return redirect;
   }

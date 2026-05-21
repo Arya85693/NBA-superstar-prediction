@@ -3,7 +3,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { getMarketMeta } from "@/lib/marketData";
 
 export const metadata = {
-  title: "How it works",
+  title: "How the model & paper trading work",
+  description:
+    "Learn how automated player repricing works, how rolling market snapshots refresh, and how to read charts and paper trade on Hoops Stock Market.",
+  alternates: { canonical: "/how-it-works" },
 };
 
 export const dynamic = "force-dynamic";

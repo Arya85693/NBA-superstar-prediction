@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 
 type State = "loading" | "ok" | "error";
 
-export function usePortfolioCash() {
+export function usePortfolioCash(enabled = true) {
   const [cash, setCash] = useState<number | null>(null);
-  const [state, setState] = useState<State>("loading");
+  const [state, setState] = useState<State>(enabled ? "loading" : "error");
 
   const load = useCallback(() => {
-    fetch("/api/portfolio")
+    if (!enabled) return;
+    fetch("/api/portfolio", { credentials: "include" })
       .then((r) => r.json())
       .then((d: { cash?: number; error?: string }) => {
         if (typeof d.cash === "number" && Number.isFinite(d.cash)) {
@@ -24,14 +25,19 @@ export function usePortfolioCash() {
         setCash(null);
         setState("error");
       });
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setCash(null);
+      setState("error");
+      return;
+    }
     load();
     const onUp = () => load();
     window.addEventListener("portfolio-updated", onUp);
     return () => window.removeEventListener("portfolio-updated", onUp);
-  }, [load]);
+  }, [enabled, load]);
 
   return { cash, state, reload: load };
 }

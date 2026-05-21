@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { formatUsd } from "@/lib/format";
-import { GUEST_BROWSE_CLEAR_PATH } from "@/lib/guestBrowse";
+import { loginHref, signupHref } from "@/lib/authRedirect";
 import { createSupabaseSessionBrowser } from "@/lib/supabase-session-browser";
 
 type Pf = { cash: number; total: number };
@@ -63,35 +63,17 @@ export function Nav() {
   }, [path]);
 
   useEffect(() => {
-    if (isAuthPage || account !== null) return;
-
-    const clearGuestCookie = () => {
-      if (typeof navigator.sendBeacon === "function") {
-        navigator.sendBeacon(
-          GUEST_BROWSE_CLEAR_PATH,
-          new Blob([], { type: "application/octet-stream" }),
-        );
-      } else {
-        void fetch(GUEST_BROWSE_CLEAR_PATH, {
-          method: "POST",
-          credentials: "include",
-          keepalive: true,
-        }).catch(() => {
-          /* best effort cleanup when guest tab closes */
-        });
-      }
-    };
-
-    window.addEventListener("pagehide", clearGuestCookie);
-    return () => {
-      window.removeEventListener("pagehide", clearGuestCookie);
-    };
-  }, [account, isAuthPage]);
+    if (account === null) {
+      setPf(null);
+      setPortfolioFetch("error");
+    }
+  }, [account]);
 
   useEffect(() => {
+    if (!account) return;
     let alive = true;
     function load() {
-      fetch("/api/portfolio")
+      fetch("/api/portfolio", { credentials: "include" })
         .then(async (r) => {
           const d = (await r.json()) as {
             cash?: number;
@@ -140,7 +122,7 @@ export function Nav() {
       alive = false;
       window.removeEventListener("portfolio-updated", onUp);
     };
-  }, [path]);
+  }, [account, path]);
 
   return (
     <header className="hs-nav-shell sticky top-0 z-50 border-b border-border/70">
@@ -180,12 +162,20 @@ export function Nav() {
               </span>
             )}
             {account === null && (
-              <Link
-                href="/login"
-                className="text-sm font-medium text-accent transition hover:text-accent-hover"
-              >
-                Log in
-              </Link>
+              <>
+                <Link
+                  href={loginHref(path)}
+                  className="text-sm font-medium text-accent transition hover:text-accent-hover"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href={signupHref(path)}
+                  className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
+                >
+                  Sign up
+                </Link>
+              </>
             )}
             {account && (
               <>
@@ -214,22 +204,24 @@ export function Nav() {
               </>
             )}
           </div>
-          <div className="rounded-lg border border-border/80 bg-surface-elevated/95 px-3.5 py-2 text-right shadow-sm">
-            <div className="hs-label text-[10px]">Buying power</div>
-            {portfolioFetch === "loading" && (
-              <div className="hs-stat-value text-sm text-muted">…</div>
-            )}
-            {portfolioFetch === "ok" && pf && (
-              <div className="hs-stat-value text-sm font-medium text-foreground">
-                {formatUsd(pf.cash)}
-              </div>
-            )}
-            {portfolioFetch === "error" && (
-              <div className="max-w-[9rem] text-xs leading-snug text-muted">
-                Couldn&apos;t load
-              </div>
-            )}
-          </div>
+          {account && (
+            <div className="rounded-lg border border-border/80 bg-surface-elevated/95 px-3.5 py-2 text-right shadow-sm">
+              <div className="hs-label text-[10px]">Buying power</div>
+              {portfolioFetch === "loading" && (
+                <div className="hs-stat-value text-sm text-muted">…</div>
+              )}
+              {portfolioFetch === "ok" && pf && (
+                <div className="hs-stat-value text-sm font-medium text-foreground">
+                  {formatUsd(pf.cash)}
+                </div>
+              )}
+              {portfolioFetch === "error" && (
+                <div className="max-w-[9rem] text-xs leading-snug text-muted">
+                  Couldn&apos;t load
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

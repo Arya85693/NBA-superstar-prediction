@@ -10,7 +10,10 @@ export async function GET() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const snap = await getPortfolioSnapshot(user?.id ?? null);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    const snap = await getPortfolioSnapshot(user.id);
     return NextResponse.json(snap);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed";

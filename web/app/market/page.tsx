@@ -7,7 +7,10 @@ import { getMarketMeta, getMarketRows } from "@/lib/marketData";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Market",
+  title: "NBA player market board",
+  description:
+    "Search and sort every tracked NBA player by model price, team, last game, and move vs the prior ingested game.",
+  alternates: { canonical: "/market" },
 };
 
 export default async function MarketPage() {

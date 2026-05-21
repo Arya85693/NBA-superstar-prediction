@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { HomeMoversSection } from "@/components/home/HomeMoversSection";
@@ -13,6 +14,13 @@ import { computeMarketAnalytics } from "@/lib/marketAnalytics";
 import { getMarketMeta, getMarketRows } from "@/lib/marketData";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "NBA player market & paper trading",
+  description:
+    "Track model-driven NBA player prices after each game refresh, explore movers and charts, and paper trade with a virtual portfolio.",
+  alternates: { canonical: "/" },
+};
 
 export default async function HomePage() {
   let seasonLabel: string | null = null;

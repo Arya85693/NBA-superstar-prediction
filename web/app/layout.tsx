@@ -30,13 +30,33 @@ const geistMono = Geist_Mono({
 
 
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+
 export const metadata: Metadata = {
+  metadataBase: siteUrl ? new URL(siteUrl) : undefined,
   title: {
     default: "Hoops Stock Market",
     template: "%s · Hoops Stock Market",
   },
   description:
     "Near real-time NBA player market analytics - model-driven paper trading with automated repricing from ingested game data (~30 min refresh cadence).",
+  openGraph: {
+    type: "website",
+    siteName: "Hoops Stock Market",
+    title: "Hoops Stock Market",
+    description:
+      "Browse NBA player model prices, charts, and analytics. Paper trade with a $100k virtual wallet after you sign in.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Hoops Stock Market",
+    description:
+      "NBA player market analytics and paper trading powered by ingested game data.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   icons: {
     icon: "/logo.png",
     apple: "/logo.png",
