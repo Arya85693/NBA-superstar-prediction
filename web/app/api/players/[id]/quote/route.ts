@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLatestForPlayer } from "@/lib/marketData";
+import { getLatestForPlayer, getMarketQuote } from "@/lib/marketData";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +12,14 @@ export async function GET(
   if (!Number.isFinite(playerId)) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
-  const quote = await getLatestForPlayer(playerId);
+  const [quote, market] = await Promise.all([
+    getLatestForPlayer(playerId),
+    getMarketQuote(playerId),
+  ]);
   if (!quote) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });
   }
-  return NextResponse.json({ quote });
+  // `quote` keeps the legacy shape (latest fair-value game row); `market` adds
+  // the tradable Market Price + Fair Value + premium + drivers.
+  return NextResponse.json({ quote, market });
 }

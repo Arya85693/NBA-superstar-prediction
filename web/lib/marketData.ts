@@ -5,7 +5,8 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseServerClient } from "./supabase";
 import { activePlayersCsvPath, pricesCsvPath } from "./paths";
 import { assignPlayerTickers } from "./playerTicker";
-import type { MarketMeta, MarketRow, PriceRow } from "./types";
+import { getMarketRevisionInfo, loadMarketStates } from "./marketState";
+import type { MarketMeta, MarketQuote, MarketRow, PriceRow } from "./types";
 
 function pricesFromSupabase(): boolean {
   return process.env.PRICES_SOURCE === "supabase";
@@ -527,11 +528,15 @@ export async function getMarketMeta(): Promise<MarketMeta> {
     }
   }
 
+  const marketRevision = await getMarketRevisionInfo();
+
   return {
     current_dataset_season: snapshot.maxSeason,
     current_dataset_last_game_date: lastGameDate,
     prices_revision: revisionInfo.revision,
     data_updated_at: revisionInfo.updatedAt,
+    market_revision: marketRevision.revision,
+    market_updated_at: marketRevision.updatedAt,
   };
 }
 
@@ -556,10 +561,7 @@ export async function loadLatestQuotes(
   return m;
 }
 
-type MarketRowAcc = PriceRow & {
-  change_pct: number | null;
-  caution_no_play_current_season: boolean;
-};
+type MarketRowAcc = Omit<MarketRow, "ticker">;
 
 export async function getTickerForPlayer(
   playerId: number,
@@ -600,8 +602,13 @@ export async function getTickerForPlayer(
   return b.tickers.get(playerId) ?? null;
 }
 
-/** Version tag for server cache - bumps when prices file or Supabase revision changes. */
+/**
+ * Version tag for server cache - bumps when Fair Value (prices revision / CSV
+ * mtime) OR the Market Price layer (market revision) changes, so the board
+ * refreshes within a cycle even when Market Price moved without a new game.
+ */
 async function marketBoardCacheKey(): Promise<string> {
+  const market = await getMarketRevisionInfo();
   if (pricesFromSupabase()) {
     const supabase = createSupabaseServerClient();
     const { data, error } = await supabase
@@ -610,32 +617,61 @@ async function marketBoardCacheKey(): Promise<string> {
       .eq("id", 1)
       .maybeSingle();
     if (error) throw new Error(`marketBoardCacheKey: ${error.message}`);
-    return `sb:${Number(data?.revision ?? 0)}`;
+    return `sb:${Number(data?.revision ?? 0)}:m${market.revision}`;
   }
   const path = pricesCsvPath();
-  if (!fs.existsSync(path)) return "disk:missing";
-  return `disk:${fs.statSync(path).mtimeMs}`;
+  const base = fs.existsSync(path) ? `disk:${fs.statSync(path).mtimeMs}` : "disk:missing";
+  return `${base}:m${market.revision}`;
 }
 
 async function buildMarketRows(): Promise<MarketRow[]> {
-  const b = await loadPricesBundle();
-  const active = await loadActivePlayerIds();
+  const [b, active, marketStates] = await Promise.all([
+    loadPricesBundle(),
+    loadActivePlayerIds(),
+    loadMarketStates(),
+  ]);
 
   const rows: MarketRowAcc[] = [];
   for (const id of active) {
     const row = b.latest.get(id);
     if (!row) continue;
+
+    // Fair Value = latest per-game price. Prior-game change is the fallback.
+    const fair_value = row.price_after_game;
     const prev = b.prior.get(id);
-    let change_pct: number | null = null;
+    let priorGameChangePct: number | null = null;
     if (prev && prev.price_after_game > 0) {
-      change_pct =
-        ((row.price_after_game - prev.price_after_game) /
-          prev.price_after_game) *
-        100;
+      priorGameChangePct =
+        ((fair_value - prev.price_after_game) / prev.price_after_game) * 100;
     }
+
+    // Layer the Market Price on top when present; otherwise fall back to FV.
+    const state = marketStates.get(id);
+    const market_price = state ? state.market_price : fair_value;
+    const change_pct = state
+      ? state.change_pct != null
+        ? state.change_pct * 100
+        : null
+      : priorGameChangePct;
+    const premium_pct =
+      fair_value > 0 ? ((market_price - fair_value) / fair_value) * 100 : null;
+    const drivers = state?.explanation?.drivers ?? undefined;
+
     const caution_no_play_current_season =
       b.maxSeason != null && !b.playedIds.has(id);
-    rows.push({ ...row, change_pct, caution_no_play_current_season });
+
+    rows.push({
+      ...row,
+      // price_after_game carries the *current tradable price* (Market Price) so
+      // existing consumers (analytics, movers, sorting) reflect the live market.
+      price_after_game: market_price,
+      change_pct,
+      caution_no_play_current_season,
+      fair_value,
+      market_price,
+      premium_pct,
+      drivers,
+    });
   }
 
   const withTickers: MarketRow[] = rows.map((r) => ({
@@ -643,7 +679,7 @@ async function buildMarketRows(): Promise<MarketRow[]> {
     ticker: b.tickers.get(r.player_id) ?? "????",
   }));
 
-  withTickers.sort((a, b) => b.price_after_game - a.price_after_game);
+  withTickers.sort((a, b) => b.market_price - a.market_price);
   return withTickers;
 }
 
@@ -688,4 +724,44 @@ export async function getLatestForPlayer(
   }
   const { latest } = await loadPricesBundle();
   return latest.get(playerId) ?? null;
+}
+
+/**
+ * The tradable quote for a player: Market Price (Layer 2) when available, else a
+ * Fair-Value fallback so trading and the player page always work. Trades fill at
+ * `market_price`.
+ */
+export async function getMarketQuote(
+  playerId: number,
+): Promise<MarketQuote | null> {
+  const [state, latest] = await Promise.all([
+    loadMarketStates().then((m) => m.get(playerId) ?? null),
+    getLatestForPlayer(playerId),
+  ]);
+
+  if (state && state.market_price > 0) {
+    return {
+      player_id: playerId,
+      market_price: state.market_price,
+      fair_value: state.fair_value,
+      premium_pct: state.premium_pct,
+      change: state.change,
+      change_pct: state.change_pct,
+      drivers: state.explanation?.drivers ?? [],
+      source: "market",
+    };
+  }
+
+  if (!latest) return null;
+  const fair = latest.price_after_game;
+  return {
+    player_id: playerId,
+    market_price: fair,
+    fair_value: fair,
+    premium_pct: 0,
+    change: 0,
+    change_pct: null,
+    drivers: ["Market Price layer not yet published — showing Fair Value."],
+    source: "fair_value_fallback",
+  };
 }

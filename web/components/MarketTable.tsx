@@ -13,6 +13,16 @@ function fmtPct(n: number | null) {
   return `${sign}${n.toFixed(2)}%`;
 }
 
+function premiumTone(p: number | null): string {
+  if (p == null || Number.isNaN(p)) return "text-muted";
+  if (p > 0.05) return "text-positive";
+  if (p < -0.05) return "text-negative";
+  return "text-muted-foreground";
+}
+
+const FAIR_VALUE_TOOLTIP =
+  "Fair Value: statistically justified price from basketball production (updates after games). Premium/discount is Market Price vs Fair Value.";
+
 function priceCautionTitle(meta: MarketMeta | undefined): string {
   const s = meta?.current_dataset_season;
   return s
@@ -266,7 +276,17 @@ export function MarketTable({
                       {fmtPct(r.change_pct)}
                     </span>
                   </div>
-                  <div className="text-xs text-muted">{r.game_date}</div>
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted">
+                    <span>{r.game_date}</span>
+                    <span title={FAIR_VALUE_TOOLTIP}>
+                      Fair ${formatUsdNumberOnly(r.fair_value)}
+                      <span className={`ml-1 ${premiumTone(r.premium_pct == null ? null : r.premium_pct / 100)}`}>
+                        {r.premium_pct == null
+                          ? ""
+                          : `(${r.premium_pct >= 0 ? "+" : ""}${r.premium_pct.toFixed(1)}%)`}
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
             </button>
@@ -286,7 +306,10 @@ export function MarketTable({
             <tr>
               <th className="pl-5">Player</th>
               <th>Team</th>
-              <th className="text-right">Price</th>
+              <th className="text-right">Market price</th>
+              <th className="text-right" title={FAIR_VALUE_TOOLTIP}>
+                Fair value
+              </th>
               <th className="text-right" title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
                 Change
               </th>
@@ -315,7 +338,7 @@ export function MarketTable({
                       <span className="block truncate font-medium text-foreground">
                         {r.player_name}
                       </span>
-                      <span className="text-xs text-muted">Model price · tap for chart</span>
+                      <span className="text-xs text-muted">Market price · tap for chart</span>
                     </div>
                   </div>
                 </td>
@@ -324,6 +347,16 @@ export function MarketTable({
                 </td>
                 <td className="px-4 py-3.5 font-medium text-foreground">
                   <RowPrice r={r} meta={meta} />
+                </td>
+                <td className="px-4 py-3.5 text-right font-mono tabular-nums">
+                  <div className="text-muted-foreground">
+                    ${formatUsdNumberOnly(r.fair_value)}
+                  </div>
+                  <div className={`text-xs ${premiumTone(r.premium_pct == null ? null : r.premium_pct / 100)}`}>
+                    {r.premium_pct == null
+                      ? "-"
+                      : `${r.premium_pct >= 0 ? "+" : ""}${r.premium_pct.toFixed(1)}%`}
+                  </div>
                 </td>
                 <td
                   className={`px-4 py-3.5 text-right font-mono tabular-nums ${

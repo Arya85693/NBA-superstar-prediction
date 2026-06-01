@@ -85,8 +85,9 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
   return (
     <div className="hs-panel p-5 md:p-6">
       <p className="mb-3 text-xs leading-relaxed text-muted">
-        Fills use the latest model quote from the current ingestion cycle. Prices refresh
-        automatically when new games are ingested (~30 min cadence).
+        Fills execute at the live Market Price. Market Price tracks Fair Value plus
+        explainable projection, demand, sentiment and team-context premiums, and refreshes
+        each ingestion cycle (~30 min) — even between games.
       </p>
       <h3 className="hs-label mb-4">
         Paper trade - {playerName}

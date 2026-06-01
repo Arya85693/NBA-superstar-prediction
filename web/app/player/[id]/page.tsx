@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { WatchlistButton } from "@/components/engagement/WatchlistButton";
 import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
+import { MarketExplainCard } from "@/components/player/MarketExplainCard";
 import { PlayerInsightsPanel } from "@/components/player/PlayerInsightsPanel";
 import { PlayerChartSection } from "@/components/PlayerChartSection";
 import { TradePanel } from "@/components/TradePanel";
@@ -10,6 +11,7 @@ import { formatUsd } from "@/lib/format";
 import {
   getLatestForPlayer,
   getMarketMeta,
+  getMarketQuote,
   getPlayerHistory,
   getTickerForPlayer,
   playerPlayedCurrentDatasetSeason,
@@ -50,9 +52,10 @@ export default async function PlayerPage({
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
 
-  const [quote, history, playedCurrentSeason, marketMeta, tickerRaw] =
+  const [quote, market, history, playedCurrentSeason, marketMeta, tickerRaw] =
     await Promise.all([
       latestForPlayer(playerId),
+      getMarketQuote(playerId),
       getPlayerHistory(playerId),
       playerPlayedCurrentDatasetSeason(playerId),
       getMarketMeta(),
@@ -62,6 +65,12 @@ export default async function PlayerPage({
   if (!quote) notFound();
 
   const ticker = tickerRaw ?? "-";
+
+  // Market Price (Layer 2) headlines the page; Fair Value (Layer 1) is shown
+  // beside it. Falls back to Fair Value when the market layer isn't published.
+  const marketPrice = market?.market_price ?? quote.price_after_game;
+  const fairValue = market?.fair_value ?? quote.price_after_game;
+  const premiumPct = market?.premium_pct ?? 0;
 
   const { avg: seasonAvgGmsc, count: seasonGmGames } = seasonGamesGmAvg(
     history,
@@ -124,13 +133,13 @@ export default async function PlayerPage({
             seasonAvgGmsc={seasonAvgGmsc}
           />
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {market ? <MarketExplainCard market={market} /> : null}
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="dash-kpi px-5 py-5">
-              <div className="hs-label">
-                Price (model)
-              </div>
+              <div className="hs-label">Market price</div>
               <div className="mt-1 flex items-baseline gap-2 font-mono text-2xl text-positive">
-                <span>{formatUsd(quote.price_after_game)}</span>
+                <span>{formatUsd(marketPrice)}</span>
                 {cautionNoPlayCurrent && (
                   <span
                     className="text-xl leading-none text-warning"
@@ -142,15 +151,38 @@ export default async function PlayerPage({
                   </span>
                 )}
               </div>
+              <p className="mt-2 text-xs text-muted">The actual tradable price.</p>
+            </div>
+
+            <div className="dash-kpi px-5 py-5">
+              <div className="hs-label">Fair value</div>
+              <div className="mt-1 font-mono text-2xl text-foreground">
+                {formatUsd(fairValue)}
+              </div>
               <p className="mt-2 text-xs text-muted">
-                Smoothed signal - see chart ranges for shape.
+                Justified by basketball production (updates after games).
               </p>
             </div>
 
             <div className="dash-kpi px-5 py-5">
-              <div className="hs-label">
-                Game score · last game
+              <div className="hs-label">Premium / discount</div>
+              <div
+                className={`mt-1 font-mono text-2xl ${
+                  premiumPct > 0
+                    ? "text-positive"
+                    : premiumPct < 0
+                      ? "text-negative"
+                      : "text-foreground"
+                }`}
+              >
+                {premiumPct >= 0 ? "+" : ""}
+                {(premiumPct * 100).toFixed(2)}%
               </div>
+              <p className="mt-2 text-xs text-muted">Market price vs Fair Value.</p>
+            </div>
+
+            <div className="dash-kpi px-5 py-5">
+              <div className="hs-label">Game score · last game</div>
               <div className="mt-1 font-mono text-2xl text-foreground">
                 {quote.game_score.toFixed(1)}
               </div>
@@ -158,9 +190,7 @@ export default async function PlayerPage({
             </div>
 
             <div className="dash-kpi px-5 py-5">
-              <div className="hs-label">
-                Season avg · game score
-              </div>
+              <div className="hs-label">Season avg · game score</div>
               <div className="mt-1 font-mono text-2xl text-foreground">
                 {seasonAvgGmsc != null ? seasonAvgGmsc.toFixed(1) : "-"}
               </div>
@@ -172,22 +202,20 @@ export default async function PlayerPage({
             </div>
 
             <div className="dash-kpi px-5 py-5">
-              <div className="hs-label">
-                Prior season avg (anchor)
-              </div>
+              <div className="hs-label">Prior season avg (anchor)</div>
               <div className="mt-1 font-mono text-2xl text-foreground">
                 {typeof priorAnchor === "number" && Number.isFinite(priorAnchor)
                   ? priorAnchor.toFixed(1)
                   : "-"}
               </div>
               <p className="mt-2 text-xs text-muted">
-                Mean GmSc in the season before this one (pricing anchor when available).
+                Mean GmSc in the season before this one (Fair Value anchor).
               </p>
             </div>
           </div>
 
           <h2 className="mb-4 mt-10 text-sm font-medium uppercase tracking-wide text-muted">
-            Price history
+            Fair Value history
           </h2>
           <PlayerChartSection
             history={history}
@@ -200,7 +228,7 @@ export default async function PlayerPage({
           <TradePanel
             playerId={playerId}
             playerName={quote.player_name}
-            price={quote.price_after_game}
+            price={marketPrice}
             ticker={ticker !== "-" ? ticker : undefined}
           />
         </div>

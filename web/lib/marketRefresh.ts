@@ -9,7 +9,7 @@ export const BOARD_TOTAL_TOOLTIP =
   "Aggregate sum of latest model prices across tracked players. Not a real market capitalization metric.";
 
 export const CHANGE_VS_PRIOR_GAME_TOOLTIP =
-  "Percent change in model price versus each player's previous ingested game row in the dataset.";
+  "Change in Market Price since the previous update cycle (falls back to change vs the player's prior ingested game before the Market Price layer is published).";
 
 export const SIMULATION_NOTE =
   "Model-driven simulation - paper currency only. Prices derive from ingested game performance and refresh on each ingestion cycle.";

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLatestForPlayer } from "@/lib/marketData";
+import { getMarketQuote } from "@/lib/marketData";
 import { getPortfolioIdForUser } from "@/lib/portfolioStore";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase";
 import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
@@ -100,12 +100,15 @@ export async function POST(req: Request) {
     );
   }
 
-  const quote = await getLatestForPlayer(playerId);
+  // Trades execute at the Market Price (Layer 2). The fill price is recorded on
+  // the trade row; the trade never overwrites Market Price directly — it only
+  // feeds future demand (see pipeline/demand_engine.py).
+  const quote = await getMarketQuote(playerId);
   if (!quote) {
     return NextResponse.json({ error: "Unknown player" }, { status: 404 });
   }
 
-  const price = quote.price_after_game;
+  const price = quote.market_price;
 
   const supabaseAuth = await createSupabaseSessionServer();
   const {
