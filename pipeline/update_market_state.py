@@ -42,6 +42,7 @@ if str(_PIPELINE_DIR) not in sys.path:
 
 from demand_engine import build_demand_window, compute_demand  # noqa: E402
 from espn_injuries import fetch_injuries, normalize_name  # noqa: E402
+from news_sentiment import fetch_news_sentiment  # noqa: E402
 from market_config import DEFAULT_CONFIG, MarketConfig  # noqa: E402
 from market_engine import compute_market_price  # noqa: E402
 from projection_engine import GameStat, compute_projection  # noqa: E402
@@ -387,6 +388,13 @@ def main() -> None:
     else:
         print("  sentiment: no injury data (feed empty/unavailable) — staying neutral.")
 
+    player_names = [info["player_name"] for info in inputs.values()]
+    news = fetch_news_sentiment(player_names)  # fail-safe: {} -> neutral headlines
+    if news:
+        print(f"  sentiment: news headlines matched {len(news)} players (RSS feeds).")
+    else:
+        print("  sentiment: no news matches (feeds empty/unavailable) — staying neutral.")
+
     url, key = _supabase_env()
     client = None
     prev_prices: dict[int, float] = {}
@@ -425,15 +433,16 @@ def main() -> None:
             TeamContextInput(team_win_pct=wp) if wp is not None else None
         )
 
-        injury = injuries.get(normalize_name(info["player_name"])) if injuries else None
-        sentiment_input = (
-            SentimentInput(
-                injury_severity=injury["severity"],
-                injury_status=injury["status"],
+        name_key = normalize_name(info["player_name"])
+        injury = injuries.get(name_key) if injuries else None
+        headline_score = news.get(name_key) if news else None
+        sentiment_input = None
+        if injury or headline_score is not None:
+            sentiment_input = SentimentInput(
+                injury_severity=injury["severity"] if injury else None,
+                injury_status=injury["status"] if injury else None,
+                headline_score=headline_score,
             )
-            if injury
-            else None
-        )
 
         rows.append(
             build_player_market_row(

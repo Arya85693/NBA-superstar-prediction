@@ -3,5 +3,8 @@ pandas>=2.0.0
 nba_api>=1.2.0
 supabase>=2.0.0
 
+# Sentiment lever: VADER scores RSS news headlines (free, keyless, no quota)
+vaderSentiment>=3.3.2
+
 # Tests (Fair Value + Market Price engines): pip install -r requirements.txt; pytest
 pytest>=8.0.0
