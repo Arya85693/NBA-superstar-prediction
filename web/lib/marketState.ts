@@ -1,19 +1,19 @@
-import fs from "fs";
-import path from "path";
-import { parse } from "csv-parse/sync";
 import { createSupabaseServerClient } from "./supabase";
 import type { MarketExplanation, MarketState } from "./types";
 
 /**
  * Market Price layer (Layer 2) loader.
  *
- * Hosted (PRICES_SOURCE=supabase): reads public.player_market_state, cached
- * until prices_snapshot_meta.market_revision changes (so new Market Prices show
- * within a cycle even when no games were played).
+ * Reads public.player_market_state from Supabase, cached until
+ * prices_snapshot_meta.market_revision changes (so new Market Prices show within
+ * a cycle even when no games were played).
  *
- * Local CSV mode: reads data/player_market_state.csv if the pipeline produced
- * one; otherwise returns an empty map and callers fall back to Fair Value. This
- * keeps the app fully functional before the market tables exist (backward compat).
+ * The Market Price layer is a *hosted* feature: it needs the database for
+ * cross-cycle continuity. In local CSV mode (PRICES_SOURCE != supabase) we
+ * intentionally return an empty map so callers fall back to Fair Value — and,
+ * importantly, we keep this module free of `fs`/`path` so Turbopack does not
+ * trace the whole parent repo during `next build`. To preview the live Market
+ * Price layer locally, run with PRICES_SOURCE=supabase (reads the same tables).
  */
 
 function pricesFromSupabase(): boolean {
@@ -32,7 +32,7 @@ function optNum(v: unknown): number | null {
 }
 
 function bool(v: unknown): boolean {
-  return v === true || v === "true" || v === "True" || v === 1 || v === "1";
+  return v === true || v === "true" || v === 1;
 }
 
 function parseExplanation(v: unknown): MarketExplanation | null {
@@ -92,10 +92,6 @@ export async function getMarketRevisionInfo(): Promise<{
   updatedAt: string | null;
 }> {
   if (!pricesFromSupabase()) {
-    const p = localMarketCsvPath();
-    if (p && fs.existsSync(p)) {
-      return { revision: fs.statSync(p).mtimeMs, updatedAt: null };
-    }
     return { revision: 0, updatedAt: null };
   }
   try {
@@ -116,18 +112,6 @@ export async function getMarketRevisionInfo(): Promise<{
   } catch {
     return { revision: 0, updatedAt: null };
   }
-}
-
-function localMarketCsvPath(): string | null {
-  // data/player_market_state.csv at repo root (one level above web/).
-  const candidates = [
-    path.join(process.cwd(), "..", "data", "player_market_state.csv"),
-    path.join(process.cwd(), "data", "player_market_state.csv"),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
 }
 
 async function loadFromSupabase(): Promise<Map<number, MarketState>> {
@@ -155,46 +139,25 @@ async function loadFromSupabase(): Promise<Map<number, MarketState>> {
   return states;
 }
 
-function loadFromLocalCsv(): Map<number, MarketState> {
-  const states = new Map<number, MarketState>();
-  const p = localMarketCsvPath();
-  if (!p) return states;
-  const text = fs.readFileSync(p, "utf-8");
-  const rows = parse(text, {
-    columns: true,
-    skip_empty_lines: true,
-    relax_quotes: true,
-  }) as MarketStateRow[];
-  for (const r of rows) {
-    const s = rowToState(r);
-    if (s.player_id > 0) states.set(s.player_id, s);
-  }
-  return states;
-}
-
 /**
  * Map of player_id -> current Market Price state. Cached until the market
- * revision (hosted) or CSV mtime (local) changes. Returns an empty map (not an
- * error) when the market layer is not yet populated.
+ * revision changes. Returns an empty map (not an error) when the market layer
+ * is not yet populated or in local CSV mode, so callers fall back to Fair Value.
  */
 export async function loadMarketStates(): Promise<Map<number, MarketState>> {
-  const { revision } = await getMarketRevisionInfo();
-  const sourceKey = pricesFromSupabase()
-    ? `sb:${revision}`
-    : `disk:${revision}`;
+  if (!pricesFromSupabase()) return new Map();
 
+  const { revision } = await getMarketRevisionInfo();
+  const sourceKey = `sb:${revision}`;
   if (stateCache?.sourceKey === sourceKey) return stateCache.states;
 
   if (!inflight) {
     inflight = (async () => {
       try {
-        const states = pricesFromSupabase()
-          ? await loadFromSupabase()
-          : loadFromLocalCsv();
+        const states = await loadFromSupabase();
         stateCache = { sourceKey, states };
         return states;
       } catch {
-        // Degrade to empty so callers fall back to Fair Value.
         const empty = new Map<number, MarketState>();
         stateCache = { sourceKey, states: empty };
         return empty;
