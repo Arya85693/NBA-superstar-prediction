@@ -29,25 +29,56 @@ class TeamContextResult:
     notes: list[str] = field(default_factory=list)
 
 
+# Sub-signal weights (bounded; final score is clamped to [-1, 1]).
+W_TEAM_SUCCESS = 0.6     # regular-season win pct vs .500
+W_PLAYOFF_SEED = 0.25    # conference seed (lower = better)
+W_OPPORTUNITY = 0.5      # role/opportunity change (dormant until provided)
+
+
 def compute_team_context(data: TeamContextInput | None = None) -> TeamContextResult:
-    """Neutral until team/standings/schedule data is connected."""
+    """
+    Turn a team's situation into a score in [-1, 1].
+
+    ``None`` (or all-empty input) => neutral 0.0, so a player whose team data is
+    missing simply leans on Fair Value. Today we feed ``team_win_pct`` (derived
+    from ingested game results); ``playoff_seed`` / ``opportunity_delta`` activate
+    automatically once those inputs are supplied.
+    """
     if data is None:
         return TeamContextResult(
             score=0.0, notes=["team context source not configured"]
         )
 
     signals: dict[str, float] = {}
+    notes: list[str] = []
     score = 0.0
-    if data.opportunity_delta is not None and data.opportunity_delta == data.opportunity_delta:
-        signals["opportunity"] = max(-1.0, min(1.0, data.opportunity_delta))
-        score += 0.6 * signals["opportunity"]
+
     if data.team_win_pct is not None and data.team_win_pct == data.team_win_pct:
-        # Center around .500; +/- up to ~0.4 contribution.
-        signals["team_success"] = max(-1.0, min(1.0, (data.team_win_pct - 0.5) * 2.0))
-        score += 0.4 * signals["team_success"]
+        # Center on .500: a .700 team => +0.4, a .300 team => -0.4.
+        ts = max(-1.0, min(1.0, (data.team_win_pct - 0.5) * 2.0))
+        signals["team_success"] = ts
+        score += W_TEAM_SUCCESS * ts
+        if ts > 0.1:
+            notes.append("team winning above .500")
+        elif ts < -0.1:
+            notes.append("team below .500")
+
+    if data.playoff_seed is not None:
+        # Seed 1 => +1, seed 8 => 0, seed 15 => -1 (lower seed is better).
+        ps = max(-1.0, min(1.0, (8.0 - float(data.playoff_seed)) / 7.0))
+        signals["playoff"] = ps
+        score += W_PLAYOFF_SEED * ps
+
+    if data.opportunity_delta is not None and data.opportunity_delta == data.opportunity_delta:
+        op = max(-1.0, min(1.0, data.opportunity_delta))
+        signals["opportunity"] = op
+        score += W_OPPORTUNITY * op
+
+    if not signals:
+        return TeamContextResult(score=0.0, notes=["no team context inputs"])
 
     return TeamContextResult(
         score=max(-1.0, min(1.0, score)),
         signals=signals,
-        notes=["team context placeholder (no live feed)"],
+        notes=notes or ["team context applied"],
     )

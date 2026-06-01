@@ -41,11 +41,15 @@ if str(_PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(_PIPELINE_DIR))
 
 from demand_engine import build_demand_window, compute_demand  # noqa: E402
+from espn_injuries import fetch_injuries, normalize_name  # noqa: E402
 from market_config import DEFAULT_CONFIG, MarketConfig  # noqa: E402
 from market_engine import compute_market_price  # noqa: E402
 from projection_engine import GameStat, compute_projection  # noqa: E402
-from sentiment_engine import compute_sentiment  # noqa: E402
-from team_context_engine import compute_team_context  # noqa: E402
+from sentiment_engine import SentimentInput, compute_sentiment  # noqa: E402
+from team_context_engine import (  # noqa: E402
+    TeamContextInput,
+    compute_team_context,
+)
 
 PRICES_CSV = REPO_ROOT / "data" / "player_game_prices.csv"
 ACTIVE_CSV = REPO_ROOT / "data" / "active_players.csv"
@@ -68,6 +72,8 @@ def build_player_market_row(
     prior_season_avg_game_score: float | None,
     demand_trades: list[dict] | None,
     as_of_date: str,
+    team_context_input: TeamContextInput | None = None,
+    sentiment_input: SentimentInput | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
 ) -> dict[str, Any]:
     """Compute a full player_market_state row for one player (no I/O)."""
@@ -75,8 +81,8 @@ def build_player_market_row(
         season_games,
         prior_season_avg_game_score=prior_season_avg_game_score,
     )
-    sentiment = compute_sentiment(None)          # dormant
-    team_context = compute_team_context(None)    # dormant
+    sentiment = compute_sentiment(sentiment_input)           # ESPN injuries (live)
+    team_context = compute_team_context(team_context_input)  # team win pct (live)
     demand_window = build_demand_window(demand_trades or [], config)
     demand = compute_demand(demand_window, config)
 
@@ -146,12 +152,18 @@ def _supabase_env() -> tuple[str | None, str | None]:
 
 
 def load_fair_value_frame() -> pd.DataFrame:
+    # `result` / `game_id` are optional (older CSVs may lack them) and only used
+    # to derive team win pct for the team-context lever — so read them when
+    # present but never fail if they're missing.
+    available = set(pd.read_csv(PRICES_CSV, nrows=0).columns)
+    base_cols = [
+        "player_id", "player_name", "team_abbr", "game_date", "season",
+        "minutes", "game_score", "price_after_game", "prior_season_avg_game_score",
+    ]
+    optional = [c for c in ("result", "game_id") if c in available]
     df = pd.read_csv(
         PRICES_CSV,
-        usecols=[
-            "player_id", "player_name", "team_abbr", "game_date", "season",
-            "minutes", "game_score", "price_after_game", "prior_season_avg_game_score",
-        ],
+        usecols=base_cols + optional,
         dtype={"season": str},
         low_memory=False,
     )
@@ -164,6 +176,46 @@ def load_fair_value_frame() -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
     df = df.sort_values(["player_id", "game_date"], kind="mergesort")
     return df
+
+
+def compute_team_win_pct(df: pd.DataFrame) -> dict[str, float]:
+    """
+    Team win pct for the current season, derived from ingested game results.
+
+    Each player-game row carries that game's W/L for the player's team, so we
+    dedupe to one row per (team, game) and count wins. No extra API call and no
+    BALLDONTLIE tier requirement — the data is already in Fair Value's CSV.
+    Returns {} when `result` isn't available so team context stays neutral.
+    """
+    if "result" not in df.columns or "game_id" not in df.columns:
+        return {}
+    if df.empty:
+        return {}
+
+    # Current season = the most recent season present in the data.
+    current_season = str(df["season"].dropna().max())
+    season_df = df[df["season"].astype(str) == current_season].copy()
+    if season_df.empty:
+        return {}
+
+    season_df["result"] = season_df["result"].astype(str).str.strip().str.upper()
+    season_df = season_df[season_df["result"].isin(["W", "L"])]
+    if season_df.empty:
+        return {}
+
+    # One row per team per game (all of a team's players share that game's result).
+    games = season_df.drop_duplicates(subset=["team_abbr", "game_id"])
+    out: dict[str, float] = {}
+    for team, g in games.groupby("team_abbr"):
+        team = str(team).strip()
+        if not team:
+            continue
+        total = len(g)
+        if total == 0:
+            continue
+        wins = int((g["result"] == "W").sum())
+        out[team] = wins / total
+    return out
 
 
 def load_active_ids() -> set[int]:
@@ -323,6 +375,18 @@ def main() -> None:
     inputs = assemble_inputs_for_players(df, active_ids)
     print(f"Market layer: {len(inputs)} active players with Fair Value.")
 
+    team_win_pct = compute_team_win_pct(df)
+    if team_win_pct:
+        print(f"  team context: win pct for {len(team_win_pct)} teams (current season).")
+    else:
+        print("  team context: no W/L data found — staying neutral.")
+
+    injuries = fetch_injuries()  # fail-safe: {} on any error -> neutral sentiment
+    if injuries:
+        print(f"  sentiment: {len(injuries)} injured players from ESPN feed.")
+    else:
+        print("  sentiment: no injury data (feed empty/unavailable) — staying neutral.")
+
     url, key = _supabase_env()
     client = None
     prev_prices: dict[int, float] = {}
@@ -355,17 +419,35 @@ def main() -> None:
 
     rows: list[dict[str, Any]] = []
     for pid, info in inputs.items():
+        team_abbr = info["team_abbr"]
+        wp = team_win_pct.get(team_abbr)
+        team_input = (
+            TeamContextInput(team_win_pct=wp) if wp is not None else None
+        )
+
+        injury = injuries.get(normalize_name(info["player_name"])) if injuries else None
+        sentiment_input = (
+            SentimentInput(
+                injury_severity=injury["severity"],
+                injury_status=injury["status"],
+            )
+            if injury
+            else None
+        )
+
         rows.append(
             build_player_market_row(
                 player_id=pid,
                 player_name=info["player_name"],
-                team_abbr=info["team_abbr"],
+                team_abbr=team_abbr,
                 fair_value=info["fair_value"],
                 prev_market_price=prev_prices.get(pid),
                 season_games=info["season_games"],
                 prior_season_avg_game_score=info["prior_season_avg_game_score"],
                 demand_trades=trades_by_player.get(pid),
                 as_of_date=as_of,
+                team_context_input=team_input,
+                sentiment_input=sentiment_input,
                 config=config,
             )
         )
