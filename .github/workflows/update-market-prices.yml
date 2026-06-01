@@ -36,8 +36,11 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r requirements.txt
 
-      - name: Fetch NBA data and rebuild prices
+      - name: Fetch NBA data and rebuild Fair Value
         run: python pipeline/run_pipeline.py --fetch-balldontlie --active
 
-      - name: Sync prices to Supabase
+      - name: Sync Fair Value to Supabase
         run: python pipeline/sync_prices_to_supabase.py
+
+      - name: Update Market Price layer
+        run: python pipeline/update_market_state.py

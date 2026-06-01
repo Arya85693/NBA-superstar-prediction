@@ -26,3 +26,7 @@ Thumbs.db
 
 # Optional: large generated data (uncomment if you do not want CSVs in git)
 # data/*.csv
+
+# Market Price state is derived each cycle and published to Supabase (continuity
+# lives in the DB / a local run). Keep this churny artifact out of git.
+data/player_market_state.csv

@@ -75,6 +75,12 @@ def main() -> None:
         env=env,
         check=True,
     )
+    subprocess.run(
+        [sys.executable, "pipeline/update_market_state.py"],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+    )
 
 
 if __name__ == "__main__":
