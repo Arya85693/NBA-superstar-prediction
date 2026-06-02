@@ -60,7 +60,7 @@ export default async function RadarPage() {
 
       <section className="mb-12" aria-labelledby="up-next-heading">
         <h2 id="up-next-heading" className="text-lg font-semibold text-charcoal">
-          Up next
+          Up next <span className="font-normal text-muted-foreground">(top 5)</span>
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Not yet at the top of the board, but in the rotation (about 16+ season
@@ -77,7 +77,7 @@ export default async function RadarPage() {
 
       <section className="mb-10" aria-labelledby="watch-heading">
         <h2 id="watch-heading" className="text-lg font-semibold text-charcoal">
-          Watch out for
+          Watch out for <span className="font-normal text-muted-foreground">(top 5)</span>
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Momentum and narrative heat for players with meaningful minutes (about

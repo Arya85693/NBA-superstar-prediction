@@ -29,8 +29,8 @@ export type RadarPicks = {
   watch: RadarPick[];
 };
 
-const UP_NEXT_LIMIT = 12;
-const WATCH_LIMIT = 12;
+const UP_NEXT_LIMIT = 5;
+const WATCH_LIMIT = 5;
 
 /** Top N by fair value treated as established stars — excluded from "up next". */
 const ESTABLISHED_STAR_RANK = 15;
