@@ -93,6 +93,33 @@ function headshotFromItem(item: EspnSearchItem): string | null {
   return `https://a.espncdn.com/i/headshots/nba/players/full/${id}.png`;
 }
 
+function canonicalTeamAbbr(abbr?: string): string {
+  const key = (abbr ?? "").toUpperCase().trim();
+  const map: Record<string, string> = {
+    UTAH: "UTA",
+    PHO: "PHX",
+    GS: "GSW",
+    SA: "SAS",
+    NY: "NYK",
+    NO: "NOP",
+    NOR: "NOP",
+    WSH: "WAS",
+    BRK: "BKN",
+    CHO: "CHA",
+  };
+  return map[key] ?? key;
+}
+
+function teamsMatch(espnAbbr: string, ours?: string): boolean {
+  if (!ours) return true;
+  return canonicalTeamAbbr(espnAbbr) === canonicalTeamAbbr(ours);
+}
+
+function itemOnTeam(item: EspnSearchItem, teamAbbr?: string): boolean {
+  if (!teamAbbr) return false;
+  return itemTeamAbbrs(item).some((a) => teamsMatch(a, teamAbbr));
+}
+
 function itemTeamAbbrs(item: EspnSearchItem): string[] {
   return (item.teamRelationships ?? [])
     .map((rel) => rel.core?.abbreviation?.toUpperCase())
@@ -116,7 +143,7 @@ function pickBestMatch(
 
   if (exact.length > 0) {
     if (abbr) {
-      const onTeam = exact.find((item) => itemTeamAbbrs(item).includes(abbr));
+      const onTeam = exact.find((item) => itemOnTeam(item, abbr));
       if (onTeam) return onTeam;
     }
     return exact[0] ?? null;
@@ -126,7 +153,7 @@ function pickBestMatch(
     const { last } = nameTokens(playerName);
     const onTeamLast = nba.find(
       (item) =>
-        itemTeamAbbrs(item).includes(abbr) &&
+        itemOnTeam(item, abbr) &&
         nameTokens(item.displayName ?? "").last === last,
     );
     if (onTeamLast) return onTeamLast;
@@ -148,11 +175,23 @@ async function espnGetJson<T>(url: string): Promise<T | null> {
   }
 }
 
+async function searchEspnPlayers(query: string): Promise<EspnSearchItem[]> {
+  const params = new URLSearchParams({
+    query,
+    limit: "25",
+    type: "player",
+  });
+  const payload = await espnGetJson<{ items?: EspnSearchItem[] }>(
+    `${ESPN_SEARCH}?${params}`,
+  );
+  return payload?.items ?? [];
+}
+
 async function fetchFromTeamRoster(
   playerName: string,
   teamAbbr: string,
 ): Promise<string | null> {
-  const teamId = ESPN_TEAM_IDS[teamAbbr.toUpperCase()];
+  const teamId = ESPN_TEAM_IDS[canonicalTeamAbbr(teamAbbr)];
   if (!teamId) return null;
 
   const payload = await espnGetJson<{ athletes?: EspnRosterAthlete[] }>(
@@ -176,16 +215,15 @@ async function fetchEspnHeadshotUrl(
   const query = playerName.trim();
   if (!query) return null;
 
-  const params = new URLSearchParams({
-    query,
-    limit: "25",
-    type: "player",
-  });
-  const payload = await espnGetJson<{ items?: EspnSearchItem[] }>(
-    `${ESPN_SEARCH}?${params}`,
-  );
-  const match = pickBestMatch(payload?.items ?? [], query, teamAbbr);
+  let match = pickBestMatch(await searchEspnPlayers(query), query, teamAbbr);
   if (match) return headshotFromItem(match);
+
+  // Legal name vs ESPN nickname (e.g. Airious Bailey → Ace Bailey): search last name.
+  const { last } = nameTokens(query);
+  if (last.length >= 3 && last.toLowerCase() !== query.toLowerCase()) {
+    match = pickBestMatch(await searchEspnPlayers(last), query, teamAbbr);
+    if (match) return headshotFromItem(match);
+  }
 
   if (teamAbbr) {
     return fetchFromTeamRoster(query, teamAbbr);
@@ -210,7 +248,7 @@ export async function getEspnHeadshotUrl(
       const url = await fetchEspnHeadshotUrl(playerName, teamAbbr);
       return url ?? "";
     },
-    ["espn-headshot-v2", cacheKey],
+    ["espn-headshot-v3", cacheKey],
     { revalidate: 604_800 },
   )();
 
