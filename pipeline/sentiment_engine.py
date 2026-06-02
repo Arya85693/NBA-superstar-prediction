@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 class SentimentInput:
     """Future inputs. All optional so today's callers pass nothing."""
     headline_score: float | None = None      # provider polarity in [-1, 1]
-    article_count: int = 0
+    article_count: int = 0                    # # matched headlines (confidence)
+    top_headline: str | None = None           # best headline (for explanation)
     injury_flag: bool = False                 # legacy boolean (still honored)
     injury_severity: float | None = None      # 0..1 (ESPN status -> severity)
     injury_status: str | None = None          # raw status for explanation/notes
@@ -31,14 +32,20 @@ class SentimentResult:
     notes: list[str] = field(default_factory=list)
 
 
-def compute_sentiment(data: SentimentInput | None = None) -> SentimentResult:
+def compute_sentiment(
+    data: SentimentInput | None = None,
+    full_confidence_articles: int = 3,
+) -> SentimentResult:
     """
     Blend available sentiment signals into a single clamped score in [-1, 1].
 
-    ``None`` (or all-empty input) => neutral 0.0. Today the live signal is the
-    ESPN injury feed (``injury_severity``); ``headline_score`` / ``social_buzz``
-    activate automatically once a news/social provider is wired — no caller
+    ``None`` (or all-empty input) => neutral 0.0. Today the live signals are the
+    ESPN injury feed (``injury_severity``) and RSS news (``headline_score``);
+    ``social_buzz`` activates automatically once a provider is wired — no caller
     changes needed.
+
+    Confidence: the news headline is scaled by ``min(1, article_count / N)`` so a
+    single headline can't swing price as hard as several corroborating ones.
     """
     if data is None:
         return SentimentResult(score=0.0, notes=["sentiment source not configured"])
@@ -48,8 +55,23 @@ def compute_sentiment(data: SentimentInput | None = None) -> SentimentResult:
     notes: list[str] = []
 
     if data.headline_score is not None and data.headline_score == data.headline_score:
-        signals["headline"] = max(-1.0, min(1.0, data.headline_score))
-        score += signals["headline"]
+        raw = max(-1.0, min(1.0, data.headline_score))
+        n = max(0, int(data.article_count))
+        confidence = 1.0
+        if full_confidence_articles > 1 and n > 0:
+            confidence = min(1.0, n / float(full_confidence_articles))
+        elif n == 0:
+            # Score supplied without a count (e.g. tests / other providers).
+            confidence = 1.0
+        contribution = raw * confidence
+        signals["headline"] = contribution
+        score += contribution
+        if abs(contribution) >= 0.01:
+            tone = "positive" if contribution > 0 else "negative"
+            if data.top_headline:
+                notes.append(f"news ({tone}): \u201c{data.top_headline}\u201d")
+            else:
+                notes.append(f"news {tone}")
 
     # Injury: prefer a graded severity (Out hits harder than Day-To-Day); fall
     # back to the legacy boolean if only that is supplied.

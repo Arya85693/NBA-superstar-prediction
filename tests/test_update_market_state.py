@@ -7,7 +7,15 @@ from team_context_engine import TeamContextInput
 from update_market_state import build_player_market_row, compute_team_win_pct
 
 
-def _row(prev=None, games=None, trades=None, fv=100.0, team_input=None, sentiment_input=None):
+def _row(
+    prev=None,
+    games=None,
+    trades=None,
+    fv=100.0,
+    team_input=None,
+    sentiment_input=None,
+    prev_sentiment_score=None,
+):
     return build_player_market_row(
         player_id=2544,
         player_name="Test Player",
@@ -20,6 +28,7 @@ def _row(prev=None, games=None, trades=None, fv=100.0, team_input=None, sentimen
         as_of_date="2026-01-01",
         team_context_input=team_input,
         sentiment_input=sentiment_input,
+        prev_sentiment_score=prev_sentiment_score,
     )
 
 
@@ -132,3 +141,30 @@ def test_no_injury_sentiment_is_neutral():
     row = _row(prev=100.0, sentiment_input=None)
     assert row["sentiment_score"] == 0.0
     assert row["sentiment_adjustment"] == 0.0
+
+
+def test_sentiment_smoothing_blends_with_prev():
+    # Fresh sentiment 0.0, prev -0.8, default smoothing 0.5 => -0.4 stored.
+    row = _row(prev=100.0, sentiment_input=None, prev_sentiment_score=-0.8)
+    assert abs(row["sentiment_score"] - (-0.4)) < 1e-6
+
+
+def test_sentiment_smoothing_dampens_a_spike():
+    # A fresh strong negative, but prior was neutral => stored is dampened.
+    si = SentimentInput(headline_score=-1.0, article_count=3)
+    raw = _row(prev=100.0, sentiment_input=si)
+    smoothed = _row(prev=100.0, sentiment_input=si, prev_sentiment_score=0.0)
+    assert smoothed["sentiment_score"] > raw["sentiment_score"]  # closer to 0
+
+
+def test_news_headline_appears_in_explanation_drivers():
+    si = SentimentInput(headline_score=0.9, article_count=3, top_headline="Star drops 40")
+    row = _row(prev=100.0, sentiment_input=si)
+    drivers = row["explanation"]["drivers"]
+    assert any("Star drops 40" in d for d in drivers)
+
+
+def test_confidence_dampens_single_article_in_row():
+    one = _row(prev=100.0, sentiment_input=SentimentInput(headline_score=0.9, article_count=1))
+    many = _row(prev=100.0, sentiment_input=SentimentInput(headline_score=0.9, article_count=3))
+    assert one["sentiment_score"] < many["sentiment_score"]

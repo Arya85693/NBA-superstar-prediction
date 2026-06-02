@@ -46,7 +46,11 @@ from news_sentiment import fetch_news_sentiment  # noqa: E402
 from market_config import DEFAULT_CONFIG, MarketConfig  # noqa: E402
 from market_engine import compute_market_price  # noqa: E402
 from projection_engine import GameStat, compute_projection  # noqa: E402
-from sentiment_engine import SentimentInput, compute_sentiment  # noqa: E402
+from sentiment_engine import (  # noqa: E402
+    SentimentInput,
+    SentimentResult,
+    compute_sentiment,
+)
 from team_context_engine import (  # noqa: E402
     TeamContextInput,
     compute_team_context,
@@ -75,6 +79,7 @@ def build_player_market_row(
     as_of_date: str,
     team_context_input: TeamContextInput | None = None,
     sentiment_input: SentimentInput | None = None,
+    prev_sentiment_score: float | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
 ) -> dict[str, Any]:
     """Compute a full player_market_state row for one player (no I/O)."""
@@ -82,7 +87,21 @@ def build_player_market_row(
         season_games,
         prior_season_avg_game_score=prior_season_avg_game_score,
     )
-    sentiment = compute_sentiment(sentiment_input)           # ESPN injuries (live)
+    # Sentiment: ESPN injuries + RSS news, confidence-scaled by article count.
+    sentiment = compute_sentiment(
+        sentiment_input,
+        full_confidence_articles=config.sentiment_full_confidence_articles,
+    )
+    # Cross-cycle smoothing (EMA): blend fresh sentiment with the prior cycle's so
+    # price doesn't whipsaw on a single new article and stale news fades to 0.
+    if prev_sentiment_score is not None and prev_sentiment_score == prev_sentiment_score:
+        a = config.sentiment_smoothing
+        smoothed = a * sentiment.score + (1.0 - a) * float(prev_sentiment_score)
+        sentiment = SentimentResult(
+            score=max(-1.0, min(1.0, smoothed)),
+            signals=sentiment.signals,
+            notes=sentiment.notes,
+        )
     team_context = compute_team_context(team_context_input)  # team win pct (live)
     demand_window = build_demand_window(demand_trades or [], config)
     demand = compute_demand(demand_window, config)
@@ -268,14 +287,16 @@ def assemble_inputs_for_players(
 # ---------------------------------------------------------------------------
 # Supabase I/O
 # ---------------------------------------------------------------------------
-def fetch_prev_market_prices(client) -> dict[int, float]:
-    prev: dict[int, float] = {}
+def fetch_prev_market_state(client) -> tuple[dict[int, float], dict[int, float]]:
+    """Returns (prev_market_price, prev_sentiment_score) maps for continuity."""
+    prices: dict[int, float] = {}
+    sentiments: dict[int, float] = {}
     page = 1000
     start = 0
     while True:
         resp = (
             client.table("player_market_state")
-            .select("player_id, market_price")
+            .select("player_id, market_price, sentiment_score")
             .range(start, start + page - 1)
             .execute()
         )
@@ -284,13 +305,19 @@ def fetch_prev_market_prices(client) -> dict[int, float]:
             break
         for r in data:
             try:
-                prev[int(r["player_id"])] = float(r["market_price"])
+                pid = int(r["player_id"])
+                prices[pid] = float(r["market_price"])
             except (TypeError, ValueError, KeyError):
                 continue
+            try:
+                if r.get("sentiment_score") is not None:
+                    sentiments[pid] = float(r["sentiment_score"])
+            except (TypeError, ValueError):
+                pass
         if len(data) < page:
             break
         start += page
-    return prev
+    return prices, sentiments
 
 
 def fetch_recent_trades(client, window_days: int) -> dict[int, list[dict]]:
@@ -398,6 +425,7 @@ def main() -> None:
     url, key = _supabase_env()
     client = None
     prev_prices: dict[int, float] = {}
+    prev_sentiment: dict[int, float] = {}
     trades_by_player: dict[int, list[dict]] = {}
 
     if url and key:
@@ -405,7 +433,7 @@ def main() -> None:
 
         client = create_client(url, key)
         try:
-            prev_prices = fetch_prev_market_prices(client)
+            prev_prices, prev_sentiment = fetch_prev_market_state(client)
             print(f"  loaded {len(prev_prices)} previous Market Prices.")
         except Exception as e:  # noqa: BLE001 - first run before table exists
             print(f"  (no previous Market Price state yet: {e})")
@@ -418,11 +446,17 @@ def main() -> None:
         # Local fallback: reuse previous local CSV for continuity if present.
         if MARKET_STATE_CSV.is_file():
             prev_df = pd.read_csv(MARKET_STATE_CSV)
+            has_sent = "sentiment_score" in prev_df.columns
             for r in prev_df.itertuples(index=False):
                 try:
                     prev_prices[int(r.player_id)] = float(r.market_price)
                 except (TypeError, ValueError):
                     continue
+                if has_sent:
+                    try:
+                        prev_sentiment[int(r.player_id)] = float(r.sentiment_score)
+                    except (TypeError, ValueError):
+                        pass
         print("  SUPABASE creds not set — local CSV-only run (demand defaults to 0).")
 
     rows: list[dict[str, Any]] = []
@@ -435,13 +469,20 @@ def main() -> None:
 
         name_key = normalize_name(info["player_name"])
         injury = injuries.get(name_key) if injuries else None
-        headline_score = news.get(name_key) if news else None
+        player_news = news.get(name_key) if news else None
         sentiment_input = None
-        if injury or headline_score is not None:
+        if injury or player_news is not None:
+            top_headline = (
+                player_news.headlines[0]["title"]
+                if player_news and player_news.headlines
+                else None
+            )
             sentiment_input = SentimentInput(
                 injury_severity=injury["severity"] if injury else None,
                 injury_status=injury["status"] if injury else None,
-                headline_score=headline_score,
+                headline_score=player_news.score if player_news else None,
+                article_count=player_news.article_count if player_news else 0,
+                top_headline=top_headline,
             )
 
         rows.append(
@@ -457,6 +498,7 @@ def main() -> None:
                 as_of_date=as_of,
                 team_context_input=team_input,
                 sentiment_input=sentiment_input,
+                prev_sentiment_score=prev_sentiment.get(pid),
                 config=config,
             )
         )

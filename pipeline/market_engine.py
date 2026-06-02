@@ -151,7 +151,7 @@ def compute_market_price(
             premium_capped=premium_capped,
             levers=levers,
         )
-        result.drivers = _build_drivers(result, projection, dem, seeded=True)
+        result.drivers = _build_drivers(result, projection, sentiment, dem, seeded=True)
         return result
 
     prev = clamp(float(prev_market_price), config.price_floor, config.price_ceiling)
@@ -189,13 +189,14 @@ def compute_market_price(
         premium_capped=premium_capped,
         levers=levers,
     )
-    result.drivers = _build_drivers(result, projection, dem, seeded=False)
+    result.drivers = _build_drivers(result, projection, sentiment, dem, seeded=False)
     return result
 
 
 def _build_drivers(
     result: MarketPriceResult,
     projection: ProjectionResult | None,
+    sentiment: SentimentResult | None,
     demand: DemandResult,
     *,
     seeded: bool,
@@ -218,7 +219,14 @@ def _build_drivers(
     if line:
         drivers.append(line)
 
-    line = _driver_line("Sentiment", result.levers["sentiment"].adjustment_pct, None)
+    sent_reason = None
+    if sentiment and sentiment.notes:
+        # Skip placeholder notes; use the first real driver (headline / injury).
+        sent_reason = next(
+            (n for n in sentiment.notes if not n.startswith(("sentiment", "no "))),
+            None,
+        )
+    line = _driver_line("Sentiment", result.levers["sentiment"].adjustment_pct, sent_reason)
     if line:
         drivers.append(line)
     line = _driver_line("Team context", result.levers["team_context"].adjustment_pct, None)

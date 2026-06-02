@@ -34,6 +34,33 @@ def test_headline_polarity_flows_through():
     assert pos > 0.0 > neg
 
 
+def test_confidence_scales_with_article_count():
+    # Same polarity, more corroborating articles => stronger signal.
+    one = compute_sentiment(
+        SentimentInput(headline_score=0.9, article_count=1), full_confidence_articles=3
+    ).score
+    three = compute_sentiment(
+        SentimentInput(headline_score=0.9, article_count=3), full_confidence_articles=3
+    ).score
+    assert 0.0 < one < three
+    # One of three articles => ~1/3 of full strength.
+    assert abs(one - 0.9 / 3.0) < 1e-6
+
+
+def test_confidence_caps_at_full():
+    capped = compute_sentiment(
+        SentimentInput(headline_score=0.5, article_count=99), full_confidence_articles=3
+    ).score
+    assert abs(capped - 0.5) < 1e-6
+
+
+def test_top_headline_appears_in_notes():
+    res = compute_sentiment(
+        SentimentInput(headline_score=0.8, article_count=3, top_headline="Star drops 40")
+    )
+    assert any("Star drops 40" in n for n in res.notes)
+
+
 def test_score_is_clamped():
     res = compute_sentiment(
         SentimentInput(headline_score=-1.0, injury_severity=1.0)

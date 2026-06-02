@@ -43,6 +43,18 @@ class MarketConfig:
     # Net shares (buys - sells) that map to a ~full-strength demand signal.
     demand_scale_shares: float = 500.0
 
+    # --- News sentiment shaping (Tier 1: stability + confidence) ---------------
+    # Headlines decay by half every this many days, so today's news outweighs
+    # stale news and a player's sentiment fades toward 0 as coverage ages.
+    sentiment_news_half_life_days: float = 3.0
+    # Number of matched headlines for full confidence. Fewer articles scale the
+    # news signal down (1 of N), so a single lucky/unlucky headline can't swing
+    # the price as hard as several corroborating ones.
+    sentiment_full_confidence_articles: int = 3
+    # Cross-cycle smoothing (EMA): new sentiment = alpha*fresh + (1-alpha)*prev.
+    # Lower = steadier (price won't whipsaw on one new article each cycle).
+    sentiment_smoothing: float = 0.5
+
     # --- Absolute price clamp (shared with Fair Value engine ceiling) ----------
     price_floor: float = 0.0
     price_ceiling: float = 240.0
@@ -61,6 +73,12 @@ class MarketConfig:
                 raise ValueError(f"{name} must be in [0, 1], got {v}")
         if not (0.0 <= self.reversion_rate <= 1.0):
             raise ValueError("reversion_rate must be in [0, 1]")
+        if not (0.0 <= self.sentiment_smoothing <= 1.0):
+            raise ValueError("sentiment_smoothing must be in [0, 1]")
+        if self.sentiment_news_half_life_days <= 0.0:
+            raise ValueError("sentiment_news_half_life_days must be > 0")
+        if self.sentiment_full_confidence_articles < 1:
+            raise ValueError("sentiment_full_confidence_articles must be >= 1")
         if self.price_ceiling <= self.price_floor:
             raise ValueError("price_ceiling must exceed price_floor")
 
