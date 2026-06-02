@@ -131,6 +131,7 @@ export default async function PlayerPage({
             history={history}
             quote={quote}
             seasonAvgGmsc={seasonAvgGmsc}
+            market={market}
           />
 
           {market ? <MarketExplainCard market={market} /> : null}

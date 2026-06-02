@@ -311,7 +311,10 @@ export function MarketTable({
                 Fair value
               </th>
               <th className="text-right" title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
-                Change
+                <div>Change</div>
+                <div className="text-[10px] font-normal normal-case text-muted">
+                  since last update
+                </div>
               </th>
               <th className="text-right">Last game</th>
               <th className="pr-5 text-right">&nbsp;</th>

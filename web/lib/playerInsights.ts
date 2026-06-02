@@ -13,6 +13,58 @@ export type PlayerInsights = {
   volatilityLabel: string | null;
 };
 
+/**
+ * Market Price snapshot (Layer 2) used to reconcile the slow Fair Value /
+ * performance read with the fast tradable price, so the page tells one story.
+ * `premium_pct` and `change_pct` are fractions (e.g. -0.021 = -2.1%).
+ */
+export type MarketReconcileInput = {
+  market_price: number;
+  fair_value: number;
+  premium_pct: number;
+  change_pct: number | null;
+};
+
+function buildMarketReconcileBullet(m: MarketReconcileInput): string | null {
+  const { market_price, fair_value, premium_pct, change_pct } = m;
+  if (
+    !Number.isFinite(market_price) ||
+    !Number.isFinite(fair_value) ||
+    fair_value <= 0
+  ) {
+    return null;
+  }
+
+  const premPct = premium_pct * 100;
+  const absPrem = Math.abs(premPct);
+  let relation: string;
+  if (premPct > 0.05) relation = `${absPrem.toFixed(1)}% above`;
+  else if (premPct < -0.05) relation = `${absPrem.toFixed(1)}% below`;
+  else relation = "right at";
+
+  let sentence =
+    relation === "right at"
+      ? `Market Price ($${market_price.toFixed(2)}) is trading right at Fair Value ($${fair_value.toFixed(2)}).`
+      : `Market Price ($${market_price.toFixed(2)}) is trading ${relation} Fair Value ($${fair_value.toFixed(2)}).`;
+
+  if (
+    change_pct != null &&
+    Number.isFinite(change_pct) &&
+    Math.abs(change_pct) >= 0.0005
+  ) {
+    const chPct = change_pct * 100;
+    const sign = chPct >= 0 ? "+" : "";
+    // Explain the apparent contradiction: mean reversion pulls a discounted
+    // price up / a premium price down toward Fair Value each cycle.
+    let drift = "";
+    if (premPct < -0.05 && chPct > 0) drift = " as it drifts back up toward Fair Value";
+    else if (premPct > 0.05 && chPct < 0) drift = " as it eases back toward Fair Value";
+    sentence += ` It moved ${sign}${chPct.toFixed(2)}% since the last update${drift}.`;
+  }
+
+  return sentence;
+}
+
 function sortedHistory(history: PriceRow[]): PriceRow[] {
   return [...history].sort(
     (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime(),
@@ -36,6 +88,7 @@ export function buildPlayerInsights(
   history: PriceRow[],
   latest: PriceRow,
   seasonAvgGmsc: number | null,
+  market?: MarketReconcileInput | null,
 ): PlayerInsights {
   const rows = sortedHistory(history);
   const seasonRows = rows.filter((r) => r.season === latest.season);
@@ -61,7 +114,7 @@ export function buildPlayerInsights(
     const abs = Math.abs(priceChange5Pct);
     const dir = priceChange5Pct >= 0 ? "risen" : "fallen";
     bullets.push(
-      `Model price has ${dir} ${abs.toFixed(1)}% over the last ${recentGames} ingested game${recentGames === 1 ? "" : "s"} in ${latest.season}.`,
+      `Fair Value has ${dir} ${abs.toFixed(1)}% over the last ${recentGames} ingested game${recentGames === 1 ? "" : "s"} in ${latest.season} (the slow, performance-driven layer).`,
     );
     if (priceChange5Pct > 2) momentum = "heating";
     else if (priceChange5Pct < -2) momentum = "cooling";
@@ -111,11 +164,19 @@ export function buildPlayerInsights(
   }
 
   if (momentum === "heating") {
-    headline = "Upward momentum - price and recent performance are trending positive.";
+    headline = "Heating up - recent game performance is lifting Fair Value.";
   } else if (momentum === "cooling") {
-    headline = "Cooling stretch - recent games or repricing are softening value.";
+    headline = "Cooling off - recent game performance is softening Fair Value.";
   } else if (momentum === "steady") {
-    headline = "Steady path - price is moving gradually with recent games.";
+    headline = "Steady path - Fair Value is moving gradually with recent games.";
+  }
+
+  // Reconcile the slow performance read with the live tradable price, so a
+  // "cooling" badge next to a green Market Price tick reads as one coherent
+  // story (price drifting back toward Fair Value) rather than a contradiction.
+  if (market) {
+    const reconcile = buildMarketReconcileBullet(market);
+    if (reconcile) bullets.unshift(reconcile);
   }
 
   if (bullets.length === 0) {

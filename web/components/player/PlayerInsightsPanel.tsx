@@ -1,6 +1,7 @@
 import {
   buildPlayerInsights,
   momentumLabel,
+  type MarketReconcileInput,
   type PlayerMomentum,
 } from "@/lib/playerInsights";
 import type { PriceRow } from "@/lib/types";
@@ -16,12 +17,14 @@ export function PlayerInsightsPanel({
   history,
   quote,
   seasonAvgGmsc,
+  market,
 }: {
   history: PriceRow[];
   quote: PriceRow;
   seasonAvgGmsc: number | null;
+  market?: MarketReconcileInput | null;
 }) {
-  const insights = buildPlayerInsights(history, quote, seasonAvgGmsc);
+  const insights = buildPlayerInsights(history, quote, seasonAvgGmsc, market);
 
   return (
     <section
