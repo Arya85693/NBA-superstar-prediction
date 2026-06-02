@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseServerClient } from "./supabase";
 import { activePlayersCsvPath, pricesCsvPath } from "./paths";
 import { assignPlayerTickers } from "./playerTicker";
+import { computePlayerMinutesProfile } from "./playerMinutes";
 import { getMarketRevisionInfo, loadMarketStates } from "./marketState";
 import type { MarketMeta, MarketQuote, MarketRow, PriceRow } from "./types";
 
@@ -159,6 +160,7 @@ function parseRow(r: Record<string, string>): PriceRow {
     game_id: String(r.game_id ?? ""),
     game_date: String(r.game_date ?? ""),
     season: String(r.season ?? ""),
+    minutes: parseNum(r.minutes),
     game_score: parseNum(r.game_score),
     price_after_game: parseNum(r.price_after_game),
     prior_season_avg_game_score: parseOptionalNum(
@@ -656,6 +658,17 @@ async function buildMarketRows(): Promise<MarketRow[]> {
     const caution_no_play_current_season =
       b.maxSeason != null && !b.playedIds.has(id);
 
+    const minutesProfile = computePlayerMinutesProfile(
+      b.histories.get(id),
+      b.maxSeason,
+    );
+    const minutesDefaults = {
+      last_game_minutes: 0,
+      season_avg_minutes: 0,
+      recent_avg_minutes: 0,
+      season_games_with_minutes: 0,
+    };
+
     rows.push({
       ...row,
       // price_after_game carries the *current tradable price* (Market Price) so
@@ -668,6 +681,7 @@ async function buildMarketRows(): Promise<MarketRow[]> {
       market_price,
       premium_pct,
       drivers,
+      ...(minutesProfile ?? minutesDefaults),
     });
   }
 

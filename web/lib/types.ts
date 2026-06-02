@@ -5,6 +5,8 @@ export type PriceRow = {
   game_id: string;
   game_date: string;
   season: string;
+  /** Minutes in this game row (0 = DNP / no log). */
+  minutes?: number;
   game_score: number;
   price_after_game: number;
   /** From pipeline when present in CSV */
@@ -31,6 +33,14 @@ export type MarketRow = PriceRow & {
   premium_pct: number | null;
   /** Top human-readable reasons the Market Price is where it is. */
   drivers?: string[];
+  /** Latest ingested game minutes (current season). */
+  last_game_minutes: number;
+  /** Season-to-date average minutes (games with minutes > 0). */
+  season_avg_minutes: number;
+  /** Average minutes over the last five played games this season. */
+  recent_avg_minutes: number;
+  /** Count of current-season games with minutes logged. */
+  season_games_with_minutes: number;
 };
 
 /** One intraday snapshot appended each market pipeline cycle. */

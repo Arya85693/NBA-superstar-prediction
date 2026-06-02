@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TeamBadge } from "@/components/dashboard/teamBadge";
 import { formatUsdNumberOnly } from "@/lib/format";
 import { formatPct } from "@/lib/marketAnalytics";
+import { formatMinutes } from "@/lib/playerMinutes";
 import type { RadarPick } from "@/lib/radarPicks";
 
 export function RadarPickGrid({
@@ -57,8 +58,19 @@ export function RadarPickGrid({
                   </div>
                 )}
               </div>
+              <p className="mt-2 text-[11px] text-muted">
+                <span className="text-muted-foreground">Minutes</span>{" "}
+                <span className="font-mono tabular-nums text-foreground">
+                  {formatMinutes(p.recent_avg_minutes)}
+                </span>{" "}
+                recent ·{" "}
+                <span className="font-mono tabular-nums text-foreground">
+                  {formatMinutes(p.season_avg_minutes)}
+                </span>{" "}
+                season avg
+              </p>
               {p.projection_score != null && p.projection_score > 0.05 && (
-                <p className="mt-2 text-[11px] text-muted">
+                <p className="mt-1 text-[11px] text-muted">
                   Projection signal{" "}
                   <span className="font-mono tabular-nums text-positive">
                     +{Math.round(p.projection_score * 100)}

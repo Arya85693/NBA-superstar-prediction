@@ -1,4 +1,8 @@
 import { isRecentGameMover } from "./marketAnalytics";
+import {
+  meetsUpNextMinutes,
+  meetsWatchMinutes,
+} from "./playerMinutes";
 import type { MarketRow, MarketState } from "./types";
 
 export type RadarPick = {
@@ -13,6 +17,8 @@ export type RadarPick = {
   fair_value_change_pct: number | null;
   change_pct: number | null;
   game_date: string;
+  season_avg_minutes: number;
+  recent_avg_minutes: number;
   /** Short human label for why they appear on this list */
   reason: string;
   score: number;
@@ -39,6 +45,19 @@ function clamp01(n: number): number {
 function normPct(pct: number | null, cap = 12): number {
   if (pct === null || Number.isNaN(pct)) return 0;
   return clamp01(Math.abs(pct) / cap);
+}
+
+/** 0–1: rewards rotation-level minutes and rising recent usage. */
+function minutesOpportunityScore(row: MarketRow): number {
+  const season = clamp01(row.season_avg_minutes / 32);
+  const recent = clamp01(row.recent_avg_minutes / 32);
+  const trend =
+    row.season_avg_minutes > 0
+      ? clamp01(
+          (row.recent_avg_minutes - row.season_avg_minutes + 6) / 12,
+        )
+      : 0;
+  return 0.45 * season + 0.4 * recent + 0.15 * trend;
 }
 
 function latestGameDate(rows: MarketRow[]): string | null {
@@ -76,6 +95,8 @@ function toPick(
     fair_value_change_pct: row.fair_value_change_pct,
     change_pct: row.change_pct,
     game_date: row.game_date,
+    season_avg_minutes: row.season_avg_minutes,
+    recent_avg_minutes: row.recent_avg_minutes,
     reason,
     score,
   };
@@ -86,11 +107,22 @@ function buildReason(parts: string[]): string {
   return uniq.slice(0, 2).join(" · ") || "On our radar";
 }
 
+function minutesReason(row: MarketRow): string | null {
+  if (row.recent_avg_minutes >= row.season_avg_minutes + 3) {
+    return "Minutes trending up";
+  }
+  if (row.season_avg_minutes >= 22) return "Rotation minutes";
+  if (row.season_avg_minutes >= 16) return "Regular minutes";
+  return null;
+}
+
 function upNextReason(
   row: MarketRow,
   state: MarketState | undefined,
 ): string {
   const parts: string[] = [];
+  const minNote = minutesReason(row);
+  if (minNote) parts.push(minNote);
   const proj = state?.projection_score ?? 0;
   if (proj > 0.25) parts.push("Projection trending up");
   else if (proj > 0.1) parts.push("Positive outlook");
@@ -105,6 +137,8 @@ function upNextReason(
 
 function watchReason(row: MarketRow, state: MarketState | undefined): string {
   const parts: string[] = [];
+  const minNote = minutesReason(row);
+  if (minNote) parts.push(minNote);
   const proj = state?.projection_score ?? 0;
   const sent = state?.sentiment_score ?? 0;
   if (proj > 0.2) parts.push("Strong projection signal");
@@ -129,6 +163,7 @@ function watchReason(row: MarketRow, state: MarketState | undefined): string {
  * Rule-based radar lists from Fair Value + Market Price levers.
  * "Up next" = breakout candidates (not yet top-tier, strong forward signals).
  * "Watch" = momentum, narrative, or unusual market vs fundamentals.
+ * Both lists require meaningful minutes — deep bench / low-usage players are excluded.
  */
 export function computeRadarPicks(
   rows: MarketRow[],
@@ -139,6 +174,8 @@ export function computeRadarPicks(
 
   const upNextScored: RadarPick[] = [];
   for (const row of active) {
+    if (!meetsUpNextMinutes(row)) continue;
+
     const rank = fairValueRank(row, rows);
     if (rank >= 0 && rank < ESTABLISHED_STAR_RANK) continue;
     if (row.fair_value < FAIR_VALUE_FLOOR || row.fair_value > FAIR_VALUE_CEILING) {
@@ -149,6 +186,7 @@ export function computeRadarPicks(
     const proj = state?.projection_score ?? 0;
     const fvMove = row.fair_value_change_pct ?? 0;
     const recent = latest ? isRecentGameMover(row, latest) : false;
+    const minsN = minutesOpportunityScore(row);
 
     const upside =
       row.fair_value > 0
@@ -156,13 +194,18 @@ export function computeRadarPicks(
         : 0;
 
     let score =
-      0.45 * clamp01((proj + 1) / 2) +
-      0.3 * normPct(fvMove > 0 ? fvMove : 0) +
+      0.35 * clamp01((proj + 1) / 2) +
+      0.2 * normPct(fvMove > 0 ? fvMove : 0) +
       0.15 * upside +
-      0.1 * (recent ? 1 : 0);
+      0.1 * (recent ? 1 : 0) +
+      0.2 * minsN;
 
     if (!state && fvMove > 0) {
-      score = 0.55 * normPct(fvMove) + 0.25 * upside + 0.2 * (recent ? 1 : 0);
+      score =
+        0.4 * normPct(fvMove) +
+        0.2 * upside +
+        0.15 * (recent ? 1 : 0) +
+        0.25 * minsN;
     }
 
     if (score < 0.22) continue;
@@ -173,6 +216,8 @@ export function computeRadarPicks(
 
   const watchScored: RadarPick[] = [];
   for (const row of active) {
+    if (!meetsWatchMinutes(row)) continue;
+
     const state = states.get(row.player_id);
     const proj = state?.projection_score ?? 0;
     const sent = state?.sentiment_score ?? 0;
@@ -180,6 +225,7 @@ export function computeRadarPicks(
     const mkt = row.change_pct;
     const prem = row.premium_pct ?? 0;
     const recent = latest ? isRecentGameMover(row, latest) : false;
+    const minsN = minutesOpportunityScore(row);
 
     const projN = clamp01((proj + 1) / 2);
     const sentN = clamp01((sent + 1) / 2);
@@ -188,11 +234,12 @@ export function computeRadarPicks(
     const premN = clamp01(Math.abs(prem) / 8);
 
     let score =
-      0.3 * projN +
-      0.2 * sentN +
-      0.25 * fvN +
-      0.15 * mktN +
-      0.1 * premN;
+      0.25 * projN +
+      0.15 * sentN +
+      0.2 * fvN +
+      0.12 * mktN +
+      0.08 * premN +
+      0.2 * minsN;
 
     if (recent && fv != null && Math.abs(fv) > 1) score += 0.08;
     if (prem > 3 && proj > 0.1) score += 0.05;
