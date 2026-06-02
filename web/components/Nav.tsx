@@ -20,6 +20,7 @@ const tabs: { href: string; label: string; match: (p: string) => boolean }[] = [
     label: "Market",
     match: (p) => p === "/market" || p.startsWith("/player/"),
   },
+  { href: "/radar", label: "Radar", match: (p) => p === "/radar" },
   { href: "/portfolio", label: "Portfolio", match: (p) => p === "/portfolio" },
   {
     href: "/how-it-works",
