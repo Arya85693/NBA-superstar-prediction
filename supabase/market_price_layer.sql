@@ -79,6 +79,31 @@ create index if not exists idx_player_market_history_player_date
   on public.player_market_history (player_id, as_of_date asc);
 
 -- ---------------------------------------------------------------------------
+-- 2b) Intraday ticks (~30 min pipeline cycles) — stock-style player charts
+--     (same as market_price_ticks.sql; safe to run either migration once)
+-- ---------------------------------------------------------------------------
+create table if not exists public.player_market_ticks (
+  player_id bigint not null,
+  recorded_at timestamptz not null default now(),
+  market_price numeric(14, 4) not null default 0,
+  fair_value numeric(14, 4) not null default 0,
+  premium_pct numeric(10, 6) not null default 0,
+  primary key (player_id, recorded_at)
+);
+
+create index if not exists idx_player_market_ticks_player_time
+  on public.player_market_ticks (player_id, recorded_at desc);
+
+alter table public.player_market_ticks enable row level security;
+
+drop policy if exists "player_market_ticks_read_anon" on public.player_market_ticks;
+create policy "player_market_ticks_read_anon" on public.player_market_ticks
+  for select to anon using (true);
+
+grant select on public.player_market_ticks to anon, authenticated;
+grant select, insert, delete on public.player_market_ticks to service_role;
+
+-- ---------------------------------------------------------------------------
 -- 3) Market revision meta (cache-bust key, distinct from prices revision)
 -- ---------------------------------------------------------------------------
 alter table public.prices_snapshot_meta

@@ -12,3 +12,7 @@ export function pricesCsvPath(): string {
 export function activePlayersCsvPath(): string {
   return path.join(getDataDir(), "active_players.csv");
 }
+
+export function marketTicksCsvPath(): string {
+  return path.join(getDataDir(), "player_market_ticks.csv");
+}

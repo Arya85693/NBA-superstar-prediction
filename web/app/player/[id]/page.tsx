@@ -16,7 +16,10 @@ import {
   getTickerForPlayer,
   playerPlayedCurrentDatasetSeason,
 } from "@/lib/marketData";
-import { getMarketTicksForPlayer } from "@/lib/marketHistory";
+import {
+  getMarketDailyHistoryForPlayer,
+  getMarketTicksForPlayer,
+} from "@/lib/marketHistory";
 import { seasonGamesGmAvg } from "@/lib/playerMetrics";
 
 export const dynamic = "force-dynamic";
@@ -53,16 +56,25 @@ export default async function PlayerPage({
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
 
-  const [quote, market, history, marketTicks, playedCurrentSeason, marketMeta, tickerRaw] =
-    await Promise.all([
-      latestForPlayer(playerId),
-      getMarketQuote(playerId),
-      getPlayerHistory(playerId),
-      getMarketTicksForPlayer(playerId),
-      playerPlayedCurrentDatasetSeason(playerId),
-      getMarketMeta(),
-      getTickerForPlayer(playerId),
-    ]);
+  const [
+    quote,
+    market,
+    history,
+    marketTicks,
+    marketDaily,
+    playedCurrentSeason,
+    marketMeta,
+    tickerRaw,
+  ] = await Promise.all([
+    latestForPlayer(playerId),
+    getMarketQuote(playerId),
+    getPlayerHistory(playerId),
+    getMarketTicksForPlayer(playerId),
+    getMarketDailyHistoryForPlayer(playerId),
+    playerPlayedCurrentDatasetSeason(playerId),
+    getMarketMeta(),
+    getTickerForPlayer(playerId),
+  ]);
 
   if (!quote) notFound();
 
@@ -227,6 +239,7 @@ export default async function PlayerPage({
           <PlayerChartSection
             history={history}
             marketTicks={marketTicks}
+            marketDaily={marketDaily}
             marketEndDate={marketMeta.current_dataset_last_game_date}
             lastGameDate={quote.game_date}
             currentMarket={{

@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import {
   buildMarketChartPoints,
   type ChartRange,
+  type ChartDataSource,
   CHART_RANGE_DAYS,
 } from "@/lib/marketChart";
+import type { MarketDailySnapshot } from "@/lib/marketHistory";
 import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
 import { PriceChart } from "@/components/PriceChart";
 import type { MarketMeta, MarketTick, PriceRow } from "@/lib/types";
@@ -18,9 +20,64 @@ const TABS: { key: ChartRange; label: string }[] = [
 
 export type { ChartRange };
 
+function sourceCaption(
+  source: ChartDataSource,
+  pointCount: number,
+  range: ChartRange,
+  tickCount: number,
+  dailyCount: number,
+): string {
+  const window = `last ${CHART_RANGE_DAYS[range]} days`;
+  if (source === "ticks") {
+    return `Market & fair value · ${pointCount} intraday snapshot${pointCount === 1 ? "" : "s"} in the ${window}${tickCount > 0 ? ` (${tickCount} ticks loaded)` : ""}`;
+  }
+  if (source === "daily") {
+    return `Market & fair value · ${pointCount} daily snapshot${pointCount === 1 ? "" : "s"} in the ${window}${dailyCount > 0 ? ` (${dailyCount} days on file)` : ""}`;
+  }
+  return `Fair value by game day · live market quote at the latest pipeline update`;
+}
+
+function sourceHint(
+  source: ChartDataSource,
+  lastGameDate: string | null | undefined,
+  marketUpdatedAt: string | null | undefined,
+  tickCount: number,
+  dailyCount: number,
+): string | null {
+  if (source === "ticks") return null;
+
+  if (source === "daily") {
+    if (tickCount === 0) {
+      return "Intraday tick history is still sparse — showing one point per pipeline day. More cycles will fill in stock-style moves between games.";
+    }
+    return null;
+  }
+
+  if (tickCount === 0 && dailyCount === 0) {
+    return (
+      "Run market_price_ticks.sql in Supabase, then python pipeline/update_market_state.py on a schedule (CI does this ~every 30 min when secrets are set). Until then, the chart uses game-day fair value with the current market quote at the end."
+    );
+  }
+
+  if (lastGameDate && marketUpdatedAt) {
+    const gameDay = lastGameDate.slice(0, 10);
+    const updatedDay = marketUpdatedAt.slice(0, 10);
+    if (updatedDay > gameDay) {
+      return `Last ingested game: ${gameDay}. Market price through the latest pipeline run is shown at the end of the line.`;
+    }
+  }
+
+  if (lastGameDate) {
+    return `Last ingested game: ${lastGameDate}. Fair value updates when new games are ingested.`;
+  }
+
+  return null;
+}
+
 export function PlayerChartSection({
   history,
   marketTicks,
+  marketDaily,
   marketEndDate,
   lastGameDate,
   currentMarket,
@@ -28,6 +85,7 @@ export function PlayerChartSection({
 }: {
   history: PriceRow[];
   marketTicks: MarketTick[];
+  marketDaily: MarketDailySnapshot[];
   marketEndDate?: string | null;
   lastGameDate?: string | null;
   currentMarket?: {
@@ -41,7 +99,7 @@ export function PlayerChartSection({
 
   const { points, source } = useMemo(
     () =>
-      buildMarketChartPoints(marketTicks, history, range, {
+      buildMarketChartPoints(marketTicks, marketDaily, history, range, {
         endAt: marketMeta?.market_updated_at ?? marketEndDate,
         endGameDate: lastGameDate ?? marketEndDate,
         currentMarket,
@@ -50,6 +108,7 @@ export function PlayerChartSection({
       currentMarket,
       history,
       lastGameDate,
+      marketDaily,
       marketEndDate,
       marketMeta?.market_updated_at,
       marketTicks,
@@ -57,7 +116,13 @@ export function PlayerChartSection({
     ],
   );
 
-  const tickCount = marketTicks.length;
+  const hint = sourceHint(
+    source,
+    lastGameDate,
+    marketMeta?.market_updated_at ?? currentMarket?.recordedAt,
+    marketTicks.length,
+    marketDaily.length,
+  );
 
   return (
     <div className="min-w-0">
@@ -91,29 +156,27 @@ export function PlayerChartSection({
       ) : (
         <>
           <p className="mb-2 text-xs text-muted">
-            {source === "ticks" ? (
-              <>
-                Market Price · {points.length} snapshot{points.length === 1 ? "" : "s"} in
-                the last {CHART_RANGE_DAYS[range]} days
-                {tickCount > 0 ? ` (${tickCount} ticks loaded)` : ""}
-              </>
-            ) : (
-              <>
-                Fair Value from games · Market tick history not available yet — run the
-                market pipeline after applying{" "}
-                <span className="font-mono">market_price_ticks.sql</span>
-              </>
+            {sourceCaption(
+              source,
+              points.length,
+              range,
+              marketTicks.length,
+              marketDaily.length,
             )}
           </p>
-          {source === "games" && lastGameDate ? (
-            <p className="mb-3 rounded-lg border border-border bg-surface-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              Chart ends at this player&apos;s last game ({lastGameDate}). Fair Value only
-              moves when new games are ingested — switch to tick history for stock-style
-              updates between games.
+          {hint ? (
+            <p
+              className={
+                source === "games"
+                  ? "mb-3 rounded-lg border border-border bg-surface-muted/50 px-3 py-2 text-xs text-muted-foreground"
+                  : "mb-3 text-xs text-muted-foreground"
+              }
+            >
+              {hint}
             </p>
           ) : null}
           <div className="hs-chart-frame rounded-xl border border-border/80 bg-surface px-2 pb-1 pt-3 sm:px-3">
-            <PriceChart points={points} showFairValue={source === "ticks"} />
+            <PriceChart points={points} showFairValue={source !== "games"} />
           </div>
         </>
       )}
