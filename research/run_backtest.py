@@ -41,7 +41,7 @@ def cli() -> None:
         best = ss.sort_values("spearman_mean", ascending=False).iloc[0]
         print(
             f"Best signal: {best['signal_name']} "
-            f"(Spearman ρ={best['spearman_mean']:.4f})"
+            f"(Spearman rho={best['spearman_mean']:.4f})"
         )
 
 

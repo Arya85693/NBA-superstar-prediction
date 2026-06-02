@@ -1,0 +1,32 @@
+{
+  "method": "One-sample t-test on daily cross-sectional Spearman rho (H0: mean rho = 0)",
+  "n_evaluation_days": 1101,
+  "n_evaluable_observations": 104396,
+  "tests_forward_delta": {
+    "signal_projection": {"mean_rho": 0.0831, "t_stat": 16.25, "p_value": 2.11e-53},
+    "signal_proj_minutes_trend": {"mean_rho": 0.1323, "t_stat": 30.33, "p_value": 2.55e-147},
+    "signal_proj_recent_trend": {"mean_rho": 0.1174, "t_stat": 29.17, "p_value": 4.62e-139},
+    "signal_fair_value": {"mean_rho": -0.0537, "t_stat": -13.37, "p_value": 6.93e-38},
+    "signal_simulated_market": {"mean_rho": -0.0542, "t_stat": -13.66, "p_value": 2.38e-39},
+    "_random_baseline": {"mean_rho": 0.0002, "t_stat": 0.06, "p_value": 0.95}
+  },
+  "paired_tests": {
+    "projection_vs_fair_value": {"mean_diff_rho": 0.1368, "t_stat": 22.681, "p_value": 9.62e-94},
+    "projection_vs_market": {"mean_diff_rho": 0.1373, "t_stat": 22.814, "p_value": 1.22e-94}
+  },
+  "projection_by_season_mean_daily_rho": {
+    "2018-19": 0.1405,
+    "2019-20": 0.0194,
+    "2020-21": 0.0304,
+    "2021-22": 0.0853,
+    "2022-23": 0.0683,
+    "2023-24": 0.0893,
+    "2024-25": 0.0863,
+    "2025-26": 0.1275
+  },
+  "decile_spread_projection": 1.524,
+  "conditional_positive_rate": {
+    "p_forward_delta_pos_given_proj_pos": 0.578,
+    "p_forward_delta_pos_given_proj_neg": 0.52
+  }
+}

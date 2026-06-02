@@ -31,8 +31,13 @@ Thumbs.db
 # lives in the DB / a local run). Keep this churny artifact out of git.
 data/player_market_state.csv
 
-# Research artifacts (framework code is tracked; outputs are local)
-research/outputs/*
+# Research artifacts (framework code is tracked; ad-hoc runs stay local)
+research/outputs/**
 !research/outputs/.gitkeep
-research/reports/*
+!research/outputs/full_historical_2018_2026/
+!research/outputs/full_historical_2018_2026/**
+research/reports/**
 !research/reports/.gitkeep
+!research/reports/EXECUTIVE_SUMMARY.md
+!research/reports/full_historical_2018_2026/
+!research/reports/full_historical_2018_2026/**

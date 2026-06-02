@@ -1,0 +1,39 @@
+# One-off run config: full universe, stable output id (inherits default.yaml settings)
+name: full_historical_backtest_2018_2026
+
+data:
+  prices_csv: data/player_game_prices.csv
+  game_logs_csv: data/cleaned_game_logs_with_game_score.csv
+  active_players_csv: data/active_players.csv
+
+horizon:
+  forward_games: 5
+  min_season_games_before_signal: 8
+  require_same_season_forward: true
+  min_minutes_per_forward_game: 1.0
+
+universe:
+  active_players_only: true
+  seasons: []
+  min_games_per_player_season: 20
+
+signals:
+  include_fair_value: true
+  include_price_momentum: true
+  include_projection: true
+  simulate_market_layer: true
+  market_prev_carry_forward: true
+
+portfolio:
+  enabled: true
+  rebalance_every_games: 5
+  top_n_holdings: 10
+  initial_capital: 100000.0
+
+outputs:
+  run_id: full_historical_2018_2026
+  write_csv: true
+  write_markdown: true
+  write_plots: true
+
+random_seed: 42
