@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 
 function initials(name: string): string {
@@ -28,15 +27,18 @@ export function PlayerHeadshot({
       style={{ width: size, height: size }}
     >
       {showImage && src ? (
-        <Image
+        // Native img — ESPN CDN is unreliable through the Next image optimizer on Vercel.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
           src={src}
           alt=""
           width={size}
           height={size}
           className="h-full w-full object-cover object-top"
-          sizes={`${size}px`}
+          loading="eager"
+          decoding="async"
+          referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
-          priority
         />
       ) : (
         <div
