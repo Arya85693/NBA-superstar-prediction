@@ -33,6 +33,15 @@ export type MarketRow = PriceRow & {
   drivers?: string[];
 };
 
+/** One intraday snapshot appended each market pipeline cycle. */
+export type MarketTick = {
+  player_id: number;
+  recorded_at: string;
+  market_price: number;
+  fair_value: number;
+  premium_pct: number;
+};
+
 /** Lever breakdown stored in player_market_state.explanation (jsonb). */
 export type MarketExplanation = {
   fair_value?: number;

@@ -18,7 +18,8 @@ Data sources
 Outputs
 -------
 - Upserts ``public.player_market_state`` (current) and
-  ``public.player_market_history`` (today's row), then bumps market_revision.
+  ``public.player_market_history`` (today's row), appends
+  ``public.player_market_ticks`` (intraday chart feed), then bumps market_revision.
 - Also writes ``data/player_market_state.csv`` for local inspection / local web.
 
 Run from repo root after sync:
@@ -59,6 +60,7 @@ from team_context_engine import (  # noqa: E402
 PRICES_CSV = REPO_ROOT / "data" / "player_game_prices.csv"
 ACTIVE_CSV = REPO_ROOT / "data" / "active_players.csv"
 MARKET_STATE_CSV = REPO_ROOT / "data" / "player_market_state.csv"
+MARKET_TICKS_CSV = REPO_ROOT / "data" / "player_market_ticks.csv"
 
 BATCH = 500
 
@@ -424,6 +426,35 @@ def write_local_csv(rows: list[dict[str, Any]]) -> None:
     print(f"  wrote {len(rows)} rows -> {MARKET_STATE_CSV.relative_to(REPO_ROOT)}")
 
 
+def append_local_ticks(rows: list[dict[str, Any]], recorded_at: str) -> None:
+    """Append one intraday tick per player for local chart preview."""
+    if not rows:
+        return
+    fields = [
+        "player_id",
+        "recorded_at",
+        "market_price",
+        "fair_value",
+        "premium_pct",
+    ]
+    write_header = not MARKET_TICKS_CSV.is_file()
+    with MARKET_TICKS_CSV.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        if write_header:
+            writer.writeheader()
+        for r in rows:
+            writer.writerow(
+                {
+                    "player_id": r["player_id"],
+                    "recorded_at": recorded_at,
+                    "market_price": r["market_price"],
+                    "fair_value": r["fair_value"],
+                    "premium_pct": r["premium_pct"],
+                }
+            )
+    print(f"  appended {len(rows)} ticks -> {MARKET_TICKS_CSV.relative_to(REPO_ROOT)}")
+
+
 def main() -> None:
     if not PRICES_CSV.is_file():
         print(f"Missing {PRICES_CSV}. Run pipeline/run_pipeline.py first.", file=sys.stderr)
@@ -565,6 +596,8 @@ def main() -> None:
         )
 
     write_local_csv(rows)
+    recorded_at = datetime.now(timezone.utc).isoformat()
+    append_local_ticks(rows, recorded_at)
 
     if client is None:
         print("Done (local CSV only). Set SUPABASE_* to publish Market Price.")
@@ -594,6 +627,21 @@ def main() -> None:
         client.table("player_market_history").upsert(
             chunk, on_conflict="player_id,as_of_date"
         ).execute()
+
+    print("Appending player_market_ticks …")
+    ticks = [
+        {
+            "player_id": r["player_id"],
+            "recorded_at": recorded_at,
+            "market_price": r["market_price"],
+            "fair_value": r["fair_value"],
+            "premium_pct": r["premium_pct"],
+        }
+        for r in rows
+    ]
+    for i in range(0, len(ticks), BATCH):
+        chunk = ticks[i : i + BATCH]
+        client.table("player_market_ticks").insert(chunk).execute()
 
     client.rpc("bump_market_revision", {}).execute()
     print("Done. Market Price published; market_revision bumped.")

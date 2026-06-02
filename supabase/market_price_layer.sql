@@ -7,8 +7,11 @@
 --                                    Fair Value, every lever score/adjustment
 --                                    and a JSON explanation. UPSERTED each cycle
 --                                    (NOT truncated) so Market Price has memory.
---   * public.player_market_history   one row per player per day: market price +
---                                    fair value time series (dormant chart feed).
+--   * public.player_market_history   one row per player per day (daily rollup).
+--   * public.player_market_ticks       one row per player per pipeline cycle
+--                                    (~30 min) for stock-style charts — see
+--                                    market_price_ticks.sql if adding to an
+--                                    existing deployment.
 --   * prices_snapshot_meta.market_revision / market_updated_at  cache-bust key
 --     the web app uses to know Market Price changed (even with no new games).
 --

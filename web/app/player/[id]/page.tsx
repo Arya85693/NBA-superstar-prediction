@@ -16,6 +16,7 @@ import {
   getTickerForPlayer,
   playerPlayedCurrentDatasetSeason,
 } from "@/lib/marketData";
+import { getMarketTicksForPlayer } from "@/lib/marketHistory";
 import { seasonGamesGmAvg } from "@/lib/playerMetrics";
 
 export const dynamic = "force-dynamic";
@@ -52,11 +53,12 @@ export default async function PlayerPage({
   const playerId = Number(id);
   if (!Number.isFinite(playerId)) notFound();
 
-  const [quote, market, history, playedCurrentSeason, marketMeta, tickerRaw] =
+  const [quote, market, history, marketTicks, playedCurrentSeason, marketMeta, tickerRaw] =
     await Promise.all([
       latestForPlayer(playerId),
       getMarketQuote(playerId),
       getPlayerHistory(playerId),
+      getMarketTicksForPlayer(playerId),
       playerPlayedCurrentDatasetSeason(playerId),
       getMarketMeta(),
       getTickerForPlayer(playerId),
@@ -215,12 +217,23 @@ export default async function PlayerPage({
             </div>
           </div>
 
-          <h2 className="mb-4 mt-10 text-sm font-medium uppercase tracking-wide text-muted">
-            Fair Value history
+          <h2 className="mb-1 mt-10 text-sm font-medium uppercase tracking-wide text-muted">
+            Market Price history
           </h2>
+          <p className="mb-4 text-xs text-muted">
+            Tradable quote over time (solid). Fair Value from stats shown dashed when tick
+            history is available.
+          </p>
           <PlayerChartSection
             history={history}
+            marketTicks={marketTicks}
             marketEndDate={marketMeta.current_dataset_last_game_date}
+            lastGameDate={quote.game_date}
+            currentMarket={{
+              marketPrice,
+              fairValue,
+              recordedAt: marketMeta.market_updated_at ?? null,
+            }}
             marketMeta={marketMeta}
           />
         </div>
