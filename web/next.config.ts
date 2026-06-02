@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
    * Pin tracing to this package so Next doesn't infer the repo root.
    */
   outputFileTracingRoot: path.join(__dirname),
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "a.espncdn.com",
+        pathname: "/i/headshots/**",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

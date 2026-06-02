@@ -4,6 +4,7 @@ import { cache } from "react";
 import { WatchlistButton } from "@/components/engagement/WatchlistButton";
 import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
 import { MarketExplainCard } from "@/components/player/MarketExplainCard";
+import { PlayerHeadshot } from "@/components/player/PlayerHeadshot";
 import { PlayerInsightsPanel } from "@/components/player/PlayerInsightsPanel";
 import { PlayerChartSection } from "@/components/PlayerChartSection";
 import { TradePanel } from "@/components/TradePanel";
@@ -21,6 +22,7 @@ import {
   getMarketTicksForPlayer,
 } from "@/lib/marketHistory";
 import { seasonGamesGmAvg } from "@/lib/playerMetrics";
+import { getEspnHeadshotUrl } from "@/lib/espnHeadshot";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +79,11 @@ export default async function PlayerPage({
   ]);
 
   if (!quote) notFound();
+
+  const headshotUrl = await getEspnHeadshotUrl(
+    quote.player_name,
+    quote.team_abbr,
+  );
 
   const ticker = tickerRaw ?? "-";
 
@@ -136,10 +143,17 @@ export default async function PlayerPage({
               />
             ) : null}
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight">{quote.player_name}</h1>
-          <p className="mt-2 text-sm text-muted">
-            Last game {quote.game_date} · Season {quote.season}
-          </p>
+          <div className="mt-3 flex items-start gap-4">
+            <PlayerHeadshot src={headshotUrl} name={quote.player_name} />
+            <div className="min-w-0 pt-1">
+              <h1 className="text-3xl font-semibold tracking-tight">
+                {quote.player_name}
+              </h1>
+              <p className="mt-2 text-sm text-muted">
+                Last game {quote.game_date} · Season {quote.season}
+              </p>
+            </div>
+          </div>
 
           <PlayerInsightsPanel
             history={history}
