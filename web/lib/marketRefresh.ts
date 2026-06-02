@@ -9,7 +9,13 @@ export const BOARD_TOTAL_TOOLTIP =
   "Aggregate sum of latest model prices across tracked players. Not a real market capitalization metric.";
 
 export const CHANGE_VS_PRIOR_GAME_TOOLTIP =
-  "Change in Market Price since the previous update cycle (falls back to change vs the player's prior ingested game before the Market Price layer is published).";
+  "Fair Value change vs the player's prior ingested game — reflects recent on-court production (updates after games).";
+
+export const MARKET_CYCLE_CHANGE_TOOLTIP =
+  "Market Price change since the previous pipeline cycle (~30 min). Can move from sentiment, team context, and mean reversion even when Fair Value is flat.";
+
+export const PREMIUM_VS_FAIR_TOOLTIP =
+  "Premium or discount: how far Market Price (tradable) sits above or below Fair Value (statistical baseline from game stats).";
 
 export const SIMULATION_NOTE =
   "Model-driven simulation - paper currency only. Prices derive from ingested game performance and refresh on each ingestion cycle.";

@@ -639,20 +639,16 @@ async function buildMarketRows(): Promise<MarketRow[]> {
     // Fair Value = latest per-game price. Prior-game change is the fallback.
     const fair_value = row.price_after_game;
     const prev = b.prior.get(id);
-    let priorGameChangePct: number | null = null;
-    if (prev && prev.price_after_game > 0) {
-      priorGameChangePct =
-        ((fair_value - prev.price_after_game) / prev.price_after_game) * 100;
-    }
+    const priorGameChangePct: number | null =
+      prev && prev.price_after_game > 0
+        ? ((fair_value - prev.price_after_game) / prev.price_after_game) * 100
+        : null;
 
     // Layer the Market Price on top when present; otherwise fall back to FV.
     const state = marketStates.get(id);
     const market_price = state ? state.market_price : fair_value;
-    const change_pct = state
-      ? state.change_pct != null
-        ? state.change_pct * 100
-        : null
-      : priorGameChangePct;
+    const marketChangePct =
+      state?.change_pct != null ? state.change_pct * 100 : null;
     const premium_pct =
       fair_value > 0 ? ((market_price - fair_value) / fair_value) * 100 : null;
     const drivers = state?.explanation?.drivers ?? undefined;
@@ -665,7 +661,8 @@ async function buildMarketRows(): Promise<MarketRow[]> {
       // price_after_game carries the *current tradable price* (Market Price) so
       // existing consumers (analytics, movers, sorting) reflect the live market.
       price_after_game: market_price,
-      change_pct,
+      change_pct: marketChangePct,
+      fair_value_change_pct: priorGameChangePct,
       caution_no_play_current_season,
       fair_value,
       market_price,

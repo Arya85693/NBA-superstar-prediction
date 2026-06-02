@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { formatUsdNumberOnly } from "@/lib/format";
-import { CHANGE_VS_PRIOR_GAME_TOOLTIP } from "@/lib/marketRefresh";
+import { CHANGE_VS_PRIOR_GAME_TOOLTIP, PREMIUM_VS_FAIR_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketMeta, MarketRow } from "@/lib/types";
 
 function fmtPct(n: number | null) {
@@ -13,15 +13,20 @@ function fmtPct(n: number | null) {
   return `${sign}${n.toFixed(2)}%`;
 }
 
-function premiumTone(p: number | null): string {
-  if (p == null || Number.isNaN(p)) return "text-muted";
-  if (p > 0.05) return "text-positive";
-  if (p < -0.05) return "text-negative";
-  return "text-muted-foreground";
+const FAIR_VALUE_TOOLTIP =
+  "Fair Value: statistically justified price from on-court production. Updates after each ingested game.";
+
+function premiumLabel(p: number | null): string {
+  if (p == null || Number.isNaN(p)) return "-";
+  if (Math.abs(p) < 0.05) return "At fair";
+  return p > 0 ? "Premium" : "Discount";
 }
 
-const FAIR_VALUE_TOOLTIP =
-  "Fair Value: statistically justified price from basketball production (updates after games). Premium/discount is Market Price vs Fair Value.";
+function pctCellClass(n: number | null): string {
+  if (n == null || Number.isNaN(n)) return "text-muted";
+  if (Math.abs(n) < 0.005) return "text-muted-foreground";
+  return n >= 0 ? "text-positive" : "text-negative";
+}
 
 function priceCautionTitle(meta: MarketMeta | undefined): string {
   const s = meta?.current_dataset_season;
@@ -34,17 +39,25 @@ type SortKey =
   | "price_desc"
   | "price_asc"
   | "name"
-  | "change_desc"
-  | "change_asc"
+  | "premium_desc"
+  | "premium_asc"
+  | "game_change_desc"
+  | "game_change_asc"
   | "date_desc";
 
+function cmpNullable(a: number | null, b: number | null): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return a - b;
+}
+
 function cmpChange(a: MarketRow, b: MarketRow): number {
-  const av = a.change_pct;
-  const bv = b.change_pct;
-  if (av == null && bv == null) return 0;
-  if (av == null) return 1;
-  if (bv == null) return -1;
-  return av - bv;
+  return cmpNullable(a.fair_value_change_pct, b.fair_value_change_pct);
+}
+
+function cmpPremium(a: MarketRow, b: MarketRow): number {
+  return cmpNullable(a.premium_pct, b.premium_pct);
 }
 
 function sortRows(rows: MarketRow[], key: SortKey): MarketRow[] {
@@ -59,10 +72,16 @@ function sortRows(rows: MarketRow[], key: SortKey): MarketRow[] {
     case "name":
       out.sort((a, b) => a.player_name.localeCompare(b.player_name));
       break;
-    case "change_desc":
+    case "premium_desc":
+      out.sort((a, b) => cmpPremium(b, a));
+      break;
+    case "premium_asc":
+      out.sort((a, b) => cmpPremium(a, b));
+      break;
+    case "game_change_desc":
       out.sort((a, b) => cmpChange(b, a));
       break;
-    case "change_asc":
+    case "game_change_asc":
       out.sort((a, b) => cmpChange(a, b));
       break;
     case "date_desc":
@@ -228,10 +247,12 @@ export function MarketTable({
             onChange={(e) => setSort(e.target.value as SortKey)}
             className="hs-select"
           >
-            <option value="price_desc">Price · high → low</option>
-            <option value="price_asc">Price · low → high</option>
-            <option value="change_desc">Change · gainers first</option>
-            <option value="change_asc">Change · losers first</option>
+            <option value="price_desc">Market price · high → low</option>
+            <option value="price_asc">Market price · low → high</option>
+            <option value="game_change_desc">Last game · gainers first</option>
+            <option value="game_change_asc">Last game · losers first</option>
+            <option value="premium_desc">Premium · highest first</option>
+            <option value="premium_asc">Discount · deepest first</option>
             <option value="date_desc">Last game · newest</option>
             <option value="name">Name · A–Z</option>
           </select>
@@ -263,30 +284,39 @@ export function MarketTable({
                 </div>
                 <div className="mt-3 space-y-2 border-t border-border pt-3 text-sm">
                   <div className="flex flex-nowrap items-center justify-between gap-3">
-                    <RowPrice r={r} meta={meta} align="start" />
-                    <span
-                      className={`shrink-0 tabular-nums ${
-                        r.change_pct == null
-                          ? "text-muted"
-                          : r.change_pct >= 0
-                            ? "text-positive"
-                            : "text-negative"
-                      }`}
-                    >
-                      {fmtPct(r.change_pct)}
-                    </span>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted">Market</p>
+                      <RowPrice r={r} meta={meta} align="start" />
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase tracking-wide text-muted">Fair value</p>
+                      <p className="font-mono tabular-nums text-muted-foreground">
+                        ${formatUsdNumberOnly(r.fair_value)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted">
-                    <span>{r.game_date}</span>
-                    <span title={FAIR_VALUE_TOOLTIP}>
-                      Fair ${formatUsdNumberOnly(r.fair_value)}
-                      <span className={`ml-1 ${premiumTone(r.premium_pct == null ? null : r.premium_pct / 100)}`}>
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span title={PREMIUM_VS_FAIR_TOOLTIP}>
+                      <span className="text-muted">Premium · </span>
+                      <span className={`font-mono tabular-nums ${pctCellClass(r.premium_pct)}`}>
                         {r.premium_pct == null
-                          ? ""
-                          : `(${r.premium_pct >= 0 ? "+" : ""}${r.premium_pct.toFixed(1)}%)`}
+                          ? "-"
+                          : `${r.premium_pct >= 0 ? "+" : ""}${r.premium_pct.toFixed(1)}%`}
+                      </span>
+                      <span className="ml-1 text-muted">
+                        {premiumLabel(r.premium_pct)}
+                      </span>
+                    </span>
+                    <span title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
+                      <span className="text-muted">Last game · </span>
+                      <span
+                        className={`font-mono tabular-nums ${pctCellClass(r.fair_value_change_pct)}`}
+                      >
+                        {fmtPct(r.fair_value_change_pct)}
                       </span>
                     </span>
                   </div>
+                  <p className="text-xs text-muted">{r.game_date}</p>
                 </div>
               </div>
             </button>
@@ -310,10 +340,16 @@ export function MarketTable({
               <th className="text-right" title={FAIR_VALUE_TOOLTIP}>
                 Fair value
               </th>
-              <th className="text-right" title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
-                <div>Change</div>
+              <th className="text-right" title={PREMIUM_VS_FAIR_TOOLTIP}>
+                <div>Premium</div>
                 <div className="text-[10px] font-normal normal-case text-muted">
-                  since last update
+                  vs fair value
+                </div>
+              </th>
+              <th className="text-right" title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
+                <div>Last game</div>
+                <div className="text-[10px] font-normal normal-case text-muted">
+                  fair value change
                 </div>
               </th>
               <th className="text-right">Last game</th>
@@ -351,26 +387,21 @@ export function MarketTable({
                 <td className="px-4 py-3.5 font-medium text-foreground">
                   <RowPrice r={r} meta={meta} />
                 </td>
+                <td className="px-4 py-3.5 text-right font-mono tabular-nums text-muted-foreground">
+                  ${formatUsdNumberOnly(r.fair_value)}
+                </td>
                 <td className="px-4 py-3.5 text-right font-mono tabular-nums">
-                  <div className="text-muted-foreground">
-                    ${formatUsdNumberOnly(r.fair_value)}
-                  </div>
-                  <div className={`text-xs ${premiumTone(r.premium_pct == null ? null : r.premium_pct / 100)}`}>
+                  <div className={pctCellClass(r.premium_pct)}>
                     {r.premium_pct == null
                       ? "-"
                       : `${r.premium_pct >= 0 ? "+" : ""}${r.premium_pct.toFixed(1)}%`}
                   </div>
+                  <div className="text-xs text-muted">{premiumLabel(r.premium_pct)}</div>
                 </td>
                 <td
-                  className={`px-4 py-3.5 text-right font-mono tabular-nums ${
-                    r.change_pct == null
-                      ? "text-muted"
-                      : r.change_pct >= 0
-                        ? "text-positive"
-                        : "text-negative"
-                  }`}
+                  className={`px-4 py-3.5 text-right font-mono tabular-nums ${pctCellClass(r.fair_value_change_pct)}`}
                 >
-                  {fmtPct(r.change_pct)}
+                  {fmtPct(r.fair_value_change_pct)}
                 </td>
                 <td className="px-4 py-3.5 text-right tabular-nums text-muted-foreground">
                   {r.game_date}

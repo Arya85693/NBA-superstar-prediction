@@ -59,15 +59,22 @@ function median(values: number[]): number {
   return (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+function gameChangePct(row: MarketRow): number | null {
+  const v = row.fair_value_change_pct;
+  if (v === null || Number.isNaN(v)) return null;
+  return v;
+}
+
 function toMover(row: MarketRow): MarketMoverSnapshot | null {
-  if (row.change_pct === null || Number.isNaN(row.change_pct)) return null;
+  const change = gameChangePct(row);
+  if (change === null) return null;
   return {
     player_id: row.player_id,
     ticker: row.ticker,
     player_name: row.player_name,
     team_abbr: row.team_abbr,
     price_after_game: row.price_after_game,
-    change_pct: row.change_pct,
+    change_pct: change,
   };
 }
 
@@ -97,9 +104,10 @@ function classifyMove(changePct: number | null): "up" | "down" | "flat" | "unkno
 function aggregateTeams(rows: MarketRow[]): TeamPerformanceSnapshot[] {
   const byTeam = new Map<string, number[]>();
   for (const row of rows) {
-    if (row.change_pct === null || Number.isNaN(row.change_pct)) continue;
+    const change = gameChangePct(row);
+    if (change === null) continue;
     const list = byTeam.get(row.team_abbr) ?? [];
-    list.push(row.change_pct);
+    list.push(change);
     byTeam.set(row.team_abbr, list);
   }
 
@@ -165,7 +173,7 @@ function computeBreadth(rows: MarketRow[]): MarketBreadthStats {
     if (row.caution_no_play_current_season) cautionFlagged += 1;
     else activeThisSeason += 1;
 
-    const bucket = classifyMove(row.change_pct);
+    const bucket = classifyMove(gameChangePct(row));
     if (bucket === "unknown") continue;
     withChangeData += 1;
     if (bucket === "up") advancing += 1;

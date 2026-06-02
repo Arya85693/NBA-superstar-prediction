@@ -13,10 +13,12 @@ export type PriceRow = {
 
 export type MarketRow = PriceRow & {
   /**
-   * Daily Market Price change when the Market Price layer is live, otherwise the
-   * change vs the player's prior ingested game (backward-compatible fallback).
+   * Market Price change since the previous pipeline cycle (~30 min). Can differ
+   * from game performance when levers (sentiment, team context, etc.) move price.
    */
   change_pct: number | null;
+  /** Fair Value change vs the player's prior ingested game (basketball performance). */
+  fair_value_change_pct: number | null;
   /** True if this player has no row with minutes > 0 in the dataset's latest season */
   caution_no_play_current_season: boolean;
   /** Short symbol (e.g. AMZN-style) - unique within the active market list */

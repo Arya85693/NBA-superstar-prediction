@@ -66,7 +66,7 @@ export function WatchlistPanel() {
       return {
         ...e,
         price: m?.price_after_game ?? null,
-        change_pct: m?.change_pct ?? null,
+        change_pct: m?.fair_value_change_pct ?? null,
         game_date: m?.game_date ?? null,
       };
     });
@@ -110,7 +110,9 @@ export function WatchlistPanel() {
               <th className="px-4 py-3 pl-5">Player</th>
               <th className="px-4 py-3">Team</th>
               <th className="px-4 py-3 text-right">Price</th>
-              <th className="px-4 py-3 text-right">Change</th>
+              <th className="px-4 py-3 text-right" title="Fair Value change vs prior ingested game">
+                Last game
+              </th>
               <th className="px-4 py-3 text-right">Last game</th>
               <th className="px-4 py-3 pr-5 text-right">&nbsp;</th>
             </tr>
