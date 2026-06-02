@@ -3,6 +3,7 @@ import { getMarketQuote } from "@/lib/marketData";
 import { getPortfolioIdForUser } from "@/lib/portfolioStore";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase";
 import { createSupabaseSessionServer } from "@/lib/supabase-session-server";
+import { fillPrice } from "@/lib/tradeCosts";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +109,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unknown player" }, { status: 404 });
   }
 
-  const price = quote.market_price;
+  // Market Price is the mid. Apply the bid/ask spread server-side so buys fill
+  // above and sells below it — this removes the risk-free "buy the discount,
+  // sell the premium" reversion arbitrage. The spread-adjusted price is what
+  // gets recorded as the fill (cost basis / P&L all use it).
+  const price = fillPrice(quote.market_price, side);
 
   const supabaseAuth = await createSupabaseSessionServer();
   const {

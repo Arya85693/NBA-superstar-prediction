@@ -42,6 +42,11 @@ class MarketConfig:
     demand_window_days: int = 7
     # Net shares (buys - sells) that map to a ~full-strength demand signal.
     demand_scale_shares: float = 500.0
+    # Anti-manipulation: the most net (recency-weighted) shares ANY single user
+    # can contribute to a player's demand signal. One whale (or a Sybil spinning
+    # one account) is capped here, so moving the price meaningfully requires many
+    # distinct users leaning the same way — not one account trading in size.
+    demand_user_cap_shares: float = 150.0
 
     # --- News sentiment shaping (Tier 1: stability + confidence) ---------------
     # Headlines decay by half every this many days, so today's news outweighs
@@ -54,6 +59,12 @@ class MarketConfig:
     # Cross-cycle smoothing (EMA): new sentiment = alpha*fresh + (1-alpha)*prev.
     # Lower = steadier (price won't whipsaw on one new article each cycle).
     sentiment_smoothing: float = 0.5
+    # Injury signal only applies while basketball is actually being played. If the
+    # most recent league game (or a given player's last game) is older than this
+    # many days, "Out" is treated as offseason/stale noise and ignored — so the
+    # injury lever doesn't discount ~everyone in July or eliminated players in the
+    # playoffs. News sentiment is unaffected (offseason trades/signings are real).
+    injury_active_window_days: int = 10
 
     # --- Absolute price clamp (shared with Fair Value engine ceiling) ----------
     price_floor: float = 0.0
@@ -79,6 +90,10 @@ class MarketConfig:
             raise ValueError("sentiment_news_half_life_days must be > 0")
         if self.sentiment_full_confidence_articles < 1:
             raise ValueError("sentiment_full_confidence_articles must be >= 1")
+        if self.injury_active_window_days < 1:
+            raise ValueError("injury_active_window_days must be >= 1")
+        if self.demand_user_cap_shares <= 0.0:
+            raise ValueError("demand_user_cap_shares must be > 0")
         if self.price_ceiling <= self.price_floor:
             raise ValueError("price_ceiling must exceed price_floor")
 

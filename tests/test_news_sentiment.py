@@ -7,6 +7,7 @@ from news_sentiment import (
     extract_items,
     score_text,
 )
+import news_sentiment
 
 NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
 
@@ -111,3 +112,62 @@ def test_score_text_empty_is_zero():
 def test_no_players_returns_empty():
     items = [NewsItem("some headline", "some headline text", 0.0)]
     assert aggregate_player_sentiment(items, []) == {}
+
+
+# --- Tier 2: basketball lexicon ----------------------------------------------
+
+def test_basketball_lexicon_scores_jargon():
+    # These words are neutral to vanilla VADER but loaded in basketball.
+    if news_sentiment._ANALYZER is None:
+        return  # VADER not installed -> degrades to neutral, nothing to assert
+    assert score_text("Star forward waived after surgery, out indefinitely") < 0.0
+    assert score_text("Guard cleared, returns healthy and clutch") > 0.0
+
+
+def test_lexicon_makes_injury_headline_negative_for_player():
+    items = [
+        NewsItem(
+            "Kawhi Leonard out, sidelined after knee surgery",
+            "Kawhi Leonard out, sidelined after knee surgery setback",
+            0.0,
+        ),
+    ]
+    out = aggregate_player_sentiment(items, ["Kawhi Leonard"])
+    if news_sentiment._ANALYZER is not None:
+        assert out["kawhi leonard"].score < 0.0
+
+
+# --- Tier 2: nickname aliases -------------------------------------------------
+
+def test_nickname_alias_matches_active_player():
+    items = [NewsItem("The Greek Freak dominant tonight", "The Greek Freak dominant tonight", 0.0)]
+    out = aggregate_player_sentiment(items, ["Giannis Antetokounmpo"])
+    assert "giannis antetokounmpo" in out
+    assert out["giannis antetokounmpo"].article_count == 1
+
+
+def test_nickname_alias_ignored_when_player_not_on_board():
+    # "Steph" -> Stephen Curry, but Curry isn't on the board -> no phantom match.
+    items = [NewsItem("Steph goes off for 50", "Steph goes off for 50", 0.0)]
+    out = aggregate_player_sentiment(items, ["LeBron James"])
+    assert out == {}
+
+
+def test_full_name_and_nickname_not_double_counted():
+    items = [
+        NewsItem(
+            "LeBron James, the King James show, dazzles",
+            "LeBron James, the King James show, dazzles",
+            0.0,
+        ),
+    ]
+    out = aggregate_player_sentiment(items, ["LeBron James"])
+    assert out["lebron james"].article_count == 1
+
+
+def test_custom_alias_map_overrides_default():
+    items = [NewsItem("Greek Freak dominant", "Greek Freak dominant", 0.0)]
+    out = aggregate_player_sentiment(
+        items, ["Giannis Antetokounmpo"], aliases={}
+    )
+    assert out == {}

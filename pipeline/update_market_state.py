@@ -29,7 +29,7 @@ from __future__ import annotations
 import csv
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -198,6 +198,31 @@ def load_fair_value_frame() -> pd.DataFrame:
     return df
 
 
+def injury_signal_active(
+    player_last_game: date | None,
+    ref_game_date: date | None,
+    as_of: date,
+    window_days: int,
+) -> bool:
+    """
+    Should the injury discount apply to this player right now?
+
+    False when basketball isn't actively being played — either the whole league
+    has been idle longer than ``window_days`` (offseason) or this player hasn't
+    appeared in a game within ``window_days`` of the latest league game
+    (eliminated / inactive / season-ending injury already priced). This stops
+    "Out" from discounting nearly every player in July and benched/eliminated
+    players in the playoffs.
+    """
+    if ref_game_date is None or player_last_game is None:
+        return False
+    if (as_of - ref_game_date).days > window_days:
+        return False  # league offseason / long idle
+    if (ref_game_date - player_last_game).days > window_days:
+        return False  # player not in current rotation
+    return True
+
+
 def compute_team_win_pct(df: pd.DataFrame) -> dict[str, float]:
     """
     Team win pct for the current season, derived from ingested game results.
@@ -321,7 +346,11 @@ def fetch_prev_market_state(client) -> tuple[dict[int, float], dict[int, float]]
 
 
 def fetch_recent_trades(client, window_days: int) -> dict[int, list[dict]]:
-    """player_id -> [{'side','shares','age_days'}] within the lookback window."""
+    """player_id -> [{'side','shares','age_days','user'}] within the lookback window.
+
+    ``user`` is the portfolio_id so the demand engine can cap each distinct
+    user's contribution (anti-manipulation).
+    """
     by_player: dict[int, list[dict]] = {}
     now = datetime.now(timezone.utc)
     cutoff = now.timestamp() - window_days * 86400
@@ -330,7 +359,7 @@ def fetch_recent_trades(client, window_days: int) -> dict[int, list[dict]]:
     while True:
         resp = (
             client.table("trades")
-            .select("player_id, side, shares, created_at")
+            .select("player_id, side, shares, created_at, portfolio_id")
             .order("created_at", desc=True)
             .range(start, start + page - 1)
             .execute()
@@ -353,7 +382,12 @@ def fetch_recent_trades(client, window_days: int) -> dict[int, list[dict]]:
             except (TypeError, ValueError, KeyError):
                 continue
             by_player.setdefault(pid, []).append(
-                {"side": r.get("side"), "shares": r.get("shares"), "age_days": age_days}
+                {
+                    "side": r.get("side"),
+                    "shares": r.get("shares"),
+                    "age_days": age_days,
+                    "user": r.get("portfolio_id"),
+                }
             )
         if stop or len(data) < page:
             break
@@ -415,6 +449,24 @@ def main() -> None:
     else:
         print("  sentiment: no injury data (feed empty/unavailable) — staying neutral.")
 
+    # Reference dates for the offseason / not-playing injury gate.
+    as_of_date_obj = datetime.fromisoformat(as_of).date()
+    ref_game_date = (
+        df["game_date"].max().date() if not df["game_date"].isna().all() else None
+    )
+    last_game_by_player = {
+        int(pid): ts.date()
+        for pid, ts in df.groupby("player_id")["game_date"].max().items()
+        if pd.notna(ts)
+    }
+    if ref_game_date is not None:
+        league_idle_days = (as_of_date_obj - ref_game_date).days
+        if league_idle_days > config.injury_active_window_days:
+            print(
+                f"  sentiment: league idle {league_idle_days}d (> "
+                f"{config.injury_active_window_days}d) — injury discounts off (offseason)."
+            )
+
     player_names = [info["player_name"] for info in inputs.values()]
     news = fetch_news_sentiment(player_names)  # fail-safe: {} -> neutral headlines
     if news:
@@ -469,6 +521,15 @@ def main() -> None:
 
         name_key = normalize_name(info["player_name"])
         injury = injuries.get(name_key) if injuries else None
+        # Drop stale "Out" tags when basketball isn't being played (offseason) or
+        # the player isn't in the current rotation (eliminated / inactive).
+        if injury is not None and not injury_signal_active(
+            last_game_by_player.get(pid),
+            ref_game_date,
+            as_of_date_obj,
+            config.injury_active_window_days,
+        ):
+            injury = None
         player_news = news.get(name_key) if news else None
         sentiment_input = None
         if injury or player_news is not None:

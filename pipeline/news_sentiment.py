@@ -39,6 +39,10 @@ NBA_RSS_FEEDS: tuple[str, ...] = (
     "https://www.cbssports.com/rss/headlines/nba/",
     "https://sports.yahoo.com/nba/rss/",
     "https://www.reddit.com/r/nba/.rss",
+    "https://basketball.realgm.com/rss/wiretap/0/0.xml",
+    "https://www.sbnation.com/rss/nba/index.xml",
+    "https://www.fadeawayworld.net/feed",
+    "https://www.clutchpoints.com/feed",
 )
 
 _USER_AGENT = "Mozilla/5.0 (hoops-stock-market pipeline)"
@@ -46,11 +50,62 @@ _USER_AGENT = "Mozilla/5.0 (hoops-stock-market pipeline)"
 # How many headlines to keep per player for the explanation.
 _MAX_HEADLINES = 3
 
+# Tier-2: domain lexicon. VADER is trained on general/social text and is blind to
+# basketball jargon ("waived", "questionable", "triple-double"). We teach it the
+# words that actually move a player's narrative so headlines score sensibly.
+# Values are VADER-scale valences (roughly [-4, 4]); single tokens + the common
+# hyphenated forms (VADER keeps internal hyphens as one token).
+NBA_LEXICON: dict[str, float] = {
+    # negative — availability / discipline / poor play
+    "out": -1.4, "doubtful": -1.5, "questionable": -0.8,
+    "injury": -1.6, "injured": -1.9, "injuries": -1.6,
+    "sidelined": -1.9, "sprain": -1.5, "strain": -1.3, "surgery": -2.3,
+    "ruptured": -2.6, "torn": -2.5, "acl": -2.2, "fracture": -2.2,
+    "ejected": -1.4, "ejection": -1.4, "suspended": -2.1, "suspension": -1.9,
+    "waived": -1.6, "benched": -1.3, "slump": -1.8, "slumping": -1.8,
+    "struggling": -1.4, "dnp": -1.3, "fined": -1.0, "setback": -1.5,
+    # positive — health / accolades / hot play
+    "clutch": 2.0, "dominant": 2.2, "dominates": 2.0, "dominated": 1.8,
+    "mvp": 2.5, "allstar": 2.0, "all-star": 2.0, "all-nba": 2.2,
+    "triple-double": 2.3, "double-double": 1.4, "career-high": 2.5,
+    "scorching": 1.8, "buzzer-beater": 2.2, "thriving": 1.8, "sizzling": 1.8,
+    "extension": 1.2, "returns": 0.9, "cleared": 1.6, "healthy": 1.3,
+    "upgraded": 1.4, "probable": 0.8,
+}
+
+# Tier-2: nickname aliases -> canonical full name. A headline that says "Steph"
+# or "The Greek Freak" should still land on the right player. Aliases are only
+# activated for players actually in the board, so they can't mis-tag someone who
+# isn't trading.
+NICKNAME_ALIASES: dict[str, str] = {
+    "king james": "LeBron James",
+    "the king": "LeBron James",
+    "steph": "Stephen Curry",
+    "chef curry": "Stephen Curry",
+    "the greek freak": "Giannis Antetokounmpo",
+    "greek freak": "Giannis Antetokounmpo",
+    "the joker": "Nikola Jokic",
+    "kd": "Kevin Durant",
+    "the beard": "James Harden",
+    "cp3": "Chris Paul",
+    "dame": "Damian Lillard",
+    "the brow": "Anthony Davis",
+    "ad": "Anthony Davis",
+    "pg13": "Paul George",
+    "klay": "Klay Thompson",
+    "luka": "Luka Doncic",
+    "the klaw": "Kawhi Leonard",
+    "spida": "Donovan Mitchell",
+    "jimmy buckets": "Jimmy Butler",
+    "the freak": "Giannis Antetokounmpo",
+}
+
 # Lazy VADER analyzer. If the dependency is missing we degrade to neutral.
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
     _ANALYZER: "SentimentIntensityAnalyzer | None" = SentimentIntensityAnalyzer()
+    _ANALYZER.lexicon.update(NBA_LEXICON)
 except Exception:  # noqa: BLE001
     _ANALYZER = None
 
@@ -146,14 +201,17 @@ def aggregate_player_sentiment(
     items: list[NewsItem],
     player_names: list[str],
     half_life_days: float = 3.0,
+    aliases: dict[str, str] | None = None,
 ) -> dict[str, PlayerNews]:
     """
     Recency-weighted news score per player, plus article count and top headlines.
 
     Players are matched by full normalised name as a padded substring (so
-    'lebron james' matches but a lone 'jordan' does not). Only players with at
-    least one mention appear in the result. ``score`` is the recency-weighted
-    average VADER compound across all matched headlines, clamped to [-1, 1].
+    'lebron james' matches but a lone 'jordan' does not). Known nicknames in
+    ``aliases`` ({nickname: full name}) are also matched, but only for players
+    that are actually on the board. Only players with at least one mention appear
+    in the result. ``score`` is the recency-weighted average VADER compound
+    across all matched headlines, clamped to [-1, 1].
     """
     name_keys: dict[str, str] = {}
     for raw in player_names:
@@ -164,6 +222,17 @@ def aggregate_player_sentiment(
     if not name_keys or not items:
         return {}
 
+    # Activate nickname needles only for canonical names that are on the board.
+    active = set(name_keys.values())
+    alias_map = NICKNAME_ALIASES if aliases is None else aliases
+    for nick, full in alias_map.items():
+        canonical = normalize_name(full)
+        if canonical not in active:
+            continue
+        nkey = normalize_name(nick)
+        if nkey:
+            name_keys[f" {nkey} "] = canonical
+
     weighted_sum: dict[str, float] = {}
     weight_total: dict[str, float] = {}
     counts: dict[str, int] = {}
@@ -171,7 +240,9 @@ def aggregate_player_sentiment(
 
     for item in items:
         padded = f" {normalize_name(item.text)} "
-        matched = [key for needle, key in name_keys.items() if needle in padded]
+        # dedupe: a headline naming both "LeBron James" and "King James" is one
+        # mention of one player, not two.
+        matched = list({key for needle, key in name_keys.items() if needle in padded})
         if not matched:
             continue
         score = score_text(item.text)

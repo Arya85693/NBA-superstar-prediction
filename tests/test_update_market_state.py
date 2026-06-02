@@ -1,10 +1,16 @@
 """Driver assembly — row building + backward compatibility (no I/O)."""
+from datetime import date
+
 import pandas as pd
 
 from projection_engine import GameStat
 from sentiment_engine import SentimentInput
 from team_context_engine import TeamContextInput
-from update_market_state import build_player_market_row, compute_team_win_pct
+from update_market_state import (
+    build_player_market_row,
+    compute_team_win_pct,
+    injury_signal_active,
+)
 
 
 def _row(
@@ -124,6 +130,41 @@ def test_compute_team_win_pct_dedupes_players_in_same_game():
 def test_compute_team_win_pct_missing_columns_returns_empty():
     df = pd.DataFrame({"team_abbr": ["LAL"], "season": ["2025-26"]})
     assert compute_team_win_pct(df) == {}
+
+
+def test_injury_active_in_season():
+    # League played 2 days ago, player played 1 day ago => injury applies.
+    assert injury_signal_active(
+        player_last_game=date(2026, 1, 9),
+        ref_game_date=date(2026, 1, 10),
+        as_of=date(2026, 1, 12),
+        window_days=10,
+    )
+
+
+def test_injury_suppressed_in_offseason():
+    # Last league game was ~2 months ago => offseason => no injury discount.
+    assert not injury_signal_active(
+        player_last_game=date(2026, 6, 1),
+        ref_game_date=date(2026, 6, 1),
+        as_of=date(2026, 8, 1),
+        window_days=10,
+    )
+
+
+def test_injury_suppressed_for_inactive_player():
+    # League is active (game yesterday) but this player hasn't played in weeks.
+    assert not injury_signal_active(
+        player_last_game=date(2026, 1, 1),
+        ref_game_date=date(2026, 2, 1),
+        as_of=date(2026, 2, 2),
+        window_days=10,
+    )
+
+
+def test_injury_gate_none_inputs_are_inactive():
+    assert not injury_signal_active(None, date(2026, 1, 1), date(2026, 1, 2), 10)
+    assert not injury_signal_active(date(2026, 1, 1), None, date(2026, 1, 2), 10)
 
 
 def test_injury_sentiment_flows_through_to_row():

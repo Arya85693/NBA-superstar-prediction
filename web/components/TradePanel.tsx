@@ -7,6 +7,7 @@ import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
 import { loginHref, signupHref } from "@/lib/authRedirect";
 import { maxWholeSharesAtPrice, usePortfolioCash } from "@/hooks/usePortfolioCash";
+import { buyPrice, sellPrice, roundTripSpreadPct } from "@/lib/tradeCosts";
 
 type Props = {
   playerId: number;
@@ -43,10 +44,13 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
   }, []);
 
   const n = Math.max(1, Math.floor(Number(shares) || 0));
-  const est = formatUsd(price * n);
+  const ask = buyPrice(price);
+  const bid = sellPrice(price);
+  const buyEst = formatUsd(ask * n);
+  const sellEst = formatUsd(bid * n);
   const maxBuyShares =
     portfolioState === "ok" && cash !== null
-      ? maxWholeSharesAtPrice(cash, price)
+      ? maxWholeSharesAtPrice(cash, ask)
       : null;
 
   async function trade(side: "buy" | "sell") {
@@ -72,7 +76,13 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
         setMsg(data.error ?? "Trade failed");
         return;
       }
-      setMsg(`${side === "buy" ? "Bought" : "Sold"} ${n} shares @ ${formatUsd(price)}`);
+      const filled =
+        typeof data.filled_at_price === "number"
+          ? data.filled_at_price
+          : side === "buy"
+            ? ask
+            : bid;
+      setMsg(`${side === "buy" ? "Bought" : "Sold"} ${n} shares @ ${formatUsd(filled)}`);
       window.dispatchEvent(new Event("portfolio-updated"));
       router.refresh();
     } catch {
@@ -85,7 +95,8 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
   return (
     <div className="hs-panel p-5 md:p-6">
       <p className="mb-3 text-xs leading-relaxed text-muted">
-        Fills execute at the live Market Price. Market Price tracks Fair Value plus
+        Fills execute around the live Market Price with a {roundTripSpreadPct()}% bid/ask spread —
+        buys fill just above the mid, sells just below. Market Price tracks Fair Value plus
         explainable projection, demand, sentiment and team-context premiums, and refreshes
         each ingestion cycle (~30 min) — even between games.
       </p>
@@ -97,9 +108,13 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
           </span>
         )}
       </h3>
-      <p className="hs-stat-value mb-3 text-2xl text-foreground">
+      <p className="hs-stat-value mb-1 text-2xl text-foreground">
         {formatUsd(price)}
-        <span className="ml-2 text-sm font-sans font-normal text-muted">/ sh</span>
+        <span className="ml-2 text-sm font-sans font-normal text-muted">/ sh mid</span>
+      </p>
+      <p className="mb-3 text-xs text-muted">
+        Buy <span className="font-mono text-success">{formatUsd(ask)}</span> · Sell{" "}
+        <span className="font-mono text-warning">{formatUsd(bid)}</span> / sh
       </p>
 
       {authUser === undefined && (
@@ -141,18 +156,21 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
             className="hs-input mb-4 font-mono"
           />
           <div className="mb-4 space-y-1 text-sm text-muted">
-            <p>Est. {est}</p>
+            <p>
+              Est. buy <span className="text-muted-foreground">{buyEst}</span> · sell{" "}
+              <span className="text-muted-foreground">{sellEst}</span>
+            </p>
             {portfolioState === "ok" && cash !== null && maxBuyShares !== null && (
               <p className="text-xs text-muted">
                 {maxBuyShares >= 1 ? (
                   <>
                     Up to <span className="font-mono text-muted-foreground">{maxBuyShares}</span>{" "}
                     share
-                    {maxBuyShares === 1 ? "" : "s"} at this price.
+                    {maxBuyShares === 1 ? "" : "s"} at the buy price.
                   </>
                 ) : (
                   <span className="text-warning/90">
-                    Buying power below one share at {formatUsd(price)} / sh.
+                    Buying power below one share at {formatUsd(ask)} / sh.
                   </span>
                 )}
               </p>
