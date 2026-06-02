@@ -18,7 +18,8 @@ export type MarketChartPoint = {
   hadGame: boolean;
 };
 
-export type ChartDataSource = "ticks" | "daily" | "games";
+/** Game-day fair value merged with market tick / daily snapshots. */
+export type ChartDataSource = "mixed" | "ticks" | "daily" | "games";
 
 const MAX_CHART_POINTS = 400;
 
@@ -49,6 +50,28 @@ function downsample<T>(points: T[], maxPoints: number): T[] {
   return out;
 }
 
+/** Keep every game-day point; thin intraday / daily snapshots to fit the budget. */
+function downsampleHybrid(points: MarketChartPoint[], maxPoints: number): MarketChartPoint[] {
+  if (points.length <= maxPoints) return points;
+
+  const games = points.filter((p) => p.hadGame);
+  const snapshots = points.filter((p) => !p.hadGame);
+  const snapshotBudget = Math.max(8, maxPoints - games.length);
+
+  if (games.length >= maxPoints) {
+    return downsample(points, maxPoints);
+  }
+
+  const sampledSnapshots =
+    snapshots.length <= snapshotBudget
+      ? snapshots
+      : downsample(snapshots, snapshotBudget);
+
+  return [...games, ...sampledSnapshots].sort(
+    (a, b) => parseInstant(a.date) - parseInstant(b.date),
+  );
+}
+
 function toChartPoint(
   date: string,
   marketPrice: number,
@@ -57,6 +80,10 @@ function toChartPoint(
   gs: number | null = null,
 ): MarketChartPoint {
   return { date, marketPrice, fairValue, gs, hadGame };
+}
+
+function inWindow(ms: number, startMs: number, endMs: number): boolean {
+  return ms >= startMs && ms <= endMs;
 }
 
 /** Build chart points from intraday Market Price ticks (stock-style). */
@@ -76,13 +103,13 @@ export function buildChartPointsFromTicks(
   if (!Number.isFinite(endMs)) return [];
 
   const startMs = endMs - CHART_RANGE_DAYS[range] * 86_400_000;
-  const inWindow = sorted.filter((t) => {
+  const inRange = sorted.filter((t) => {
     const ms = parseInstant(t.recorded_at);
-    return ms >= startMs && ms <= endMs;
+    return inWindow(ms, startMs, endMs);
   });
-  if (inWindow.length === 0) return [];
+  if (inRange.length === 0) return [];
 
-  const sampled = downsample(inWindow, MAX_CHART_POINTS);
+  const sampled = downsample(inRange, MAX_CHART_POINTS);
   return sampled.map((t) =>
     toChartPoint(t.recorded_at, t.market_price, t.fair_value),
   );
@@ -101,13 +128,13 @@ export function buildChartPointsFromDaily(
   const endMs = parseInstant(`${endDate}T23:59:59Z`);
   const startMs = endMs - CHART_RANGE_DAYS[range] * 86_400_000;
 
-  const inWindow = sorted.filter((d) => {
+  const inRange = sorted.filter((d) => {
     const ms = parseInstant(`${d.as_of_date}T12:00:00Z`);
-    return ms >= startMs && ms <= endMs;
+    return inWindow(ms, startMs, endMs);
   });
-  if (inWindow.length === 0) return [];
+  if (inRange.length === 0) return [];
 
-  const sampled = downsample(inWindow, MAX_CHART_POINTS);
+  const sampled = downsample(inRange, MAX_CHART_POINTS);
   return sampled.map((d) =>
     toChartPoint(
       `${d.as_of_date}T12:00:00Z`,
@@ -175,34 +202,45 @@ export function buildChartPointsFromGames(
     );
   }
 
-  if (currentMarket && currentMarket.marketPrice > 0) {
-    const stamp =
-      currentMarket.recordedAt ?? `${endIso}T23:59:59Z`;
-    const last = out[out.length - 1];
-    if (
-      last &&
-      Math.abs(last.marketPrice - currentMarket.marketPrice) > 0.0005
-    ) {
-      if (stamp.slice(0, 10) === last.date.slice(0, 10)) {
-        last.marketPrice = currentMarket.marketPrice;
-        last.fairValue = currentMarket.fairValue;
-      } else {
-        out.push(
-          toChartPoint(
-            stamp,
-            currentMarket.marketPrice,
-            currentMarket.fairValue,
-          ),
-        );
-      }
-    }
-  }
-
+  augmentEndPoint(out, currentMarket, endIso, currentMarket?.recordedAt);
   return downsample(out, MAX_CHART_POINTS);
 }
 
-function augmentTicksWithLiveQuote(
-  tickPoints: MarketChartPoint[],
+function augmentEndPoint(
+  out: MarketChartPoint[],
+  currentMarket:
+    | { marketPrice: number; fairValue: number; recordedAt?: string | null }
+    | undefined,
+  endIso: string,
+  endAt?: string | null,
+): void {
+  if (!currentMarket || currentMarket.marketPrice <= 0) return;
+
+  const stamp = endAt ?? currentMarket.recordedAt ?? `${endIso}T23:59:59Z`;
+  const last = out[out.length - 1];
+  if (!last) return;
+
+  if (Math.abs(last.marketPrice - currentMarket.marketPrice) < 0.0005) return;
+
+  if (stamp.slice(0, 10) === last.date.slice(0, 10)) {
+    last.marketPrice = currentMarket.marketPrice;
+    last.fairValue = currentMarket.fairValue;
+    return;
+  }
+
+  if (parseInstant(stamp) <= parseInstant(last.date)) return;
+
+  out.push(
+    toChartPoint(
+      stamp,
+      currentMarket.marketPrice,
+      currentMarket.fairValue,
+    ),
+  );
+}
+
+function augmentWithLiveQuote(
+  points: MarketChartPoint[],
   opts?: {
     endAt?: string | null;
     currentMarket?: {
@@ -213,20 +251,89 @@ function augmentTicksWithLiveQuote(
   },
 ): MarketChartPoint[] {
   const cm = opts?.currentMarket;
-  if (!cm || cm.marketPrice <= 0 || tickPoints.length === 0) return tickPoints;
+  if (!cm || cm.marketPrice <= 0 || points.length === 0) return points;
 
-  const last = tickPoints[tickPoints.length - 1]!;
-  const stamp = opts?.endAt ?? cm.recordedAt ?? new Date().toISOString();
-  if (parseInstant(stamp) <= parseInstant(last.date)) return tickPoints;
-  if (Math.abs(last.marketPrice - cm.marketPrice) < 0.0005) return tickPoints;
-
-  return [
-    ...tickPoints,
-    toChartPoint(stamp, cm.marketPrice, cm.fairValue),
-  ];
+  const out = [...points];
+  augmentEndPoint(out, cm, chartEndIso(opts?.endAt), opts?.endAt);
+  return out;
 }
 
-/** Prefer ticks, then daily rollup, then game steps extended to the live quote. */
+/**
+ * Merge ingested game rows (fair value steps) with market ticks / daily rollups
+ * so the line shows full season history AND post-game / post-playoff market moves.
+ */
+export function buildChartPointsHybrid(
+  ticks: MarketTick[],
+  daily: MarketDailySnapshot[],
+  history: PriceRow[],
+  range: ChartRange,
+  opts?: {
+    endAt?: string | null;
+    endGameDate?: string | null;
+    currentMarket?: {
+      marketPrice: number;
+      fairValue: number;
+      recordedAt?: string | null;
+    };
+  },
+): MarketChartPoint[] {
+  const endMs = parseInstant(
+    opts?.endAt ?? `${chartEndIso(opts?.endAt, opts?.endGameDate)}T23:59:59Z`,
+  );
+  if (!Number.isFinite(endMs)) return [];
+
+  const startMs = endMs - CHART_RANGE_DAYS[range] * 86_400_000;
+  const merged: MarketChartPoint[] = [];
+
+  const sortedGames = [...history].sort(
+    (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime(),
+  );
+
+  for (const row of sortedGames) {
+    const ms = parseInstant(`${row.game_date}T12:00:00Z`);
+    if (!inWindow(ms, startMs, endMs)) continue;
+    const fv = row.price_after_game;
+    merged.push(
+      toChartPoint(`${row.game_date}T12:00:00Z`, fv, fv, true, row.game_score),
+    );
+  }
+
+  const tickDays = new Set<string>();
+
+  for (const tick of ticks) {
+    const ms = parseInstant(tick.recorded_at);
+    if (!inWindow(ms, startMs, endMs)) continue;
+    tickDays.add(tick.recorded_at.slice(0, 10));
+    merged.push(
+      toChartPoint(
+        tick.recorded_at,
+        tick.market_price,
+        tick.fair_value,
+      ),
+    );
+  }
+
+  for (const snap of daily) {
+    const day = snap.as_of_date.slice(0, 10);
+    const ms = parseInstant(`${day}T12:00:00Z`);
+    if (!inWindow(ms, startMs, endMs)) continue;
+    if (tickDays.has(day)) continue;
+    merged.push(
+      toChartPoint(
+        `${day}T12:00:00Z`,
+        snap.market_price,
+        snap.fair_value,
+      ),
+    );
+  }
+
+  merged.sort((a, b) => parseInstant(a.date) - parseInstant(b.date));
+
+  const withLive = augmentWithLiveQuote(merged, opts);
+  return downsampleHybrid(withLive, MAX_CHART_POINTS);
+}
+
+/** Game history + market snapshots when possible; narrow tick-only windows fall back. */
 export function buildMarketChartPoints(
   ticks: MarketTick[],
   daily: MarketDailySnapshot[],
@@ -242,14 +349,27 @@ export function buildMarketChartPoints(
     };
   },
 ): { points: MarketChartPoint[]; source: ChartDataSource } {
+  if (history.length > 0) {
+    const hybrid = buildChartPointsHybrid(ticks, daily, history, range, opts);
+    if (hybrid.length >= 2) {
+      return { points: hybrid, source: "mixed" };
+    }
+    if (hybrid.length === 1 && opts?.currentMarket) {
+      const doubled = augmentWithLiveQuote(hybrid, opts);
+      if (doubled.length >= 2) {
+        return { points: doubled, source: "mixed" };
+      }
+    }
+  }
+
   let tickPoints = buildChartPointsFromTicks(ticks, range, opts?.endAt);
-  tickPoints = augmentTicksWithLiveQuote(tickPoints, opts);
+  tickPoints = augmentWithLiveQuote(tickPoints, opts);
   if (tickPoints.length >= 2) {
     return { points: tickPoints, source: "ticks" };
   }
 
   let dailyPoints = buildChartPointsFromDaily(daily, range, opts?.endAt);
-  dailyPoints = augmentTicksWithLiveQuote(dailyPoints, opts);
+  dailyPoints = augmentWithLiveQuote(dailyPoints, opts);
   if (dailyPoints.length >= 2) {
     return { points: dailyPoints, source: "daily" };
   }

@@ -28,6 +28,9 @@ function sourceCaption(
   dailyCount: number,
 ): string {
   const window = `last ${CHART_RANGE_DAYS[range]} days`;
+  if (source === "mixed") {
+    return `Game-day fair value + market snapshots · ${pointCount} point${pointCount === 1 ? "" : "s"} in the ${window}${tickCount > 0 ? ` (${tickCount} ticks)` : dailyCount > 0 ? ` (${dailyCount} daily)` : ""}`;
+  }
   if (source === "ticks") {
     return `Market & fair value · ${pointCount} intraday snapshot${pointCount === 1 ? "" : "s"} in the ${window}${tickCount > 0 ? ` (${tickCount} ticks loaded)` : ""}`;
   }
@@ -44,6 +47,17 @@ function sourceHint(
   tickCount: number,
   dailyCount: number,
 ): string | null {
+  if (source === "mixed") {
+    if (lastGameDate && marketUpdatedAt) {
+      const gameDay = lastGameDate.slice(0, 10);
+      const updatedDay = marketUpdatedAt.slice(0, 10);
+      if (updatedDay > gameDay) {
+        return `Fair value steps on ingested games. Market price keeps updating from pipeline snapshots after the last game (${gameDay}) — including when a team is out.`;
+      }
+    }
+    return "Fair value steps on ingested games; market price follows pipeline snapshots between games.";
+  }
+
   if (source === "ticks") return null;
 
   if (source === "daily") {
