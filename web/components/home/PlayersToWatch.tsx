@@ -19,7 +19,8 @@ export function PlayersToWatch({ analytics }: { analytics: MarketAnalytics }) {
         3 players to watch this cycle
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Largest repricing moves in the latest ingestion - open any card to see why.
+        Biggest Fair Value swings from the latest ingested games — players who actually
+        played recently.
       </p>
       <ul className="mt-4 grid gap-3 sm:grid-cols-3">
         {picks.map((p) => {
@@ -40,7 +41,7 @@ export function PlayersToWatch({ analytics }: { analytics: MarketAnalytics }) {
                 >
                   {formatPct(p.change_pct)}
                 </p>
-                <p className="mt-1 text-xs text-muted">vs prior ingested game</p>
+                <p className="mt-1 text-xs text-muted">Last game · fair value change</p>
               </Link>
             </li>
           );

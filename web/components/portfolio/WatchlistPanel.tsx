@@ -113,7 +113,7 @@ export function WatchlistPanel() {
               <th className="px-4 py-3 text-right" title="Fair Value change vs prior ingested game">
                 Last game
               </th>
-              <th className="px-4 py-3 text-right">Last game</th>
+              <th className="px-4 py-3 text-right">Game date</th>
               <th className="px-4 py-3 pr-5 text-right">&nbsp;</th>
             </tr>
           </thead>

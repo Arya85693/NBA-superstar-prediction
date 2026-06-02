@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { formatUsd } from "@/lib/format";
-import type { MarketAnalytics } from "@/lib/marketAnalytics";
-import { formatPct } from "@/lib/marketAnalytics";
+import {
+  formatPct,
+  RECENT_MOVER_MAX_AGE_DAYS,
+  type MarketAnalytics,
+} from "@/lib/marketAnalytics";
 import { BOARD_TOTAL_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketMeta } from "@/lib/types";
 import { BreadthPanel } from "./BreadthPanel";
@@ -134,23 +137,24 @@ export function MarketIntelligenceDashboard({
         <div>
           <h3 className="dash-section-title">Movement</h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Largest moves vs each player&apos;s prior ingested game
+            Fair Value moves from recent ingested games (within {RECENT_MOVER_MAX_AGE_DAYS}{" "}
+            days of the latest league game)
           </p>
         </div>
         <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
           <MoversPanel
             title="Top gainers"
-            subtitle="Positive movers"
+            subtitle="Last game · Fair Value up"
             movers={topGainers}
             direction="gain"
-            emptyMessage="No gainers with prior-game quotes in this snapshot."
+            emptyMessage="No recent-game gainers in this snapshot."
           />
           <MoversPanel
             title="Top losers"
-            subtitle="Negative movers"
+            subtitle="Last game · Fair Value down"
             movers={topLosers}
             direction="loss"
-            emptyMessage="No losers with prior-game quotes in this snapshot."
+            emptyMessage="No recent-game losers in this snapshot."
           />
         </div>
       </div>

@@ -253,7 +253,7 @@ export function MarketTable({
             <option value="game_change_asc">Last game · losers first</option>
             <option value="premium_desc">Premium · highest first</option>
             <option value="premium_asc">Discount · deepest first</option>
-            <option value="date_desc">Last game · newest</option>
+            <option value="date_desc">Game date · newest</option>
             <option value="name">Name · A–Z</option>
           </select>
         </div>
@@ -352,7 +352,7 @@ export function MarketTable({
                   fair value change
                 </div>
               </th>
-              <th className="text-right">Last game</th>
+              <th className="text-right">Game date</th>
               <th className="pr-5 text-right">&nbsp;</th>
             </tr>
           </thead>

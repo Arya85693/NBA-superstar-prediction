@@ -60,8 +60,8 @@ export function buildMarketBrief(analytics: MarketAnalytics): string {
   }
 
   if (pulse.gainersPct >= pulse.losersPct) {
-    return `Board breadth: ${adv}% of tracked players repriced upward versus their prior ingested game in the latest cycle (${decl}% declined, ${breadth.unchanged} flat).`;
+    return `Recent games: ${adv}% of active players saw Fair Value rise vs their prior game (${decl}% fell, ${breadth.unchanged} flat).`;
   }
 
-  return `Board breadth: ${decl}% of tracked players repriced downward versus their prior ingested game in the latest cycle (${adv}% advanced, ${breadth.unchanged} flat).`;
+  return `Recent games: ${decl}% of active players saw Fair Value fall vs their prior game (${adv}% rose, ${breadth.unchanged} flat).`;
 }

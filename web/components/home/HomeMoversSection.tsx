@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { MoverRow } from "@/components/dashboard/MoverRow";
 import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
 import { CHANGE_VS_PRIOR_GAME_TOOLTIP } from "@/lib/marketRefresh";
+import { RECENT_MOVER_MAX_AGE_DAYS } from "@/lib/marketAnalytics";
 import type { MarketAnalytics } from "@/lib/marketAnalytics";
 import type { MarketMeta } from "@/lib/types";
 
@@ -28,8 +29,9 @@ export function HomeMoversSection({
           className="mt-2 text-sm text-muted-foreground"
           title={CHANGE_VS_PRIOR_GAME_TOOLTIP}
         >
-          Largest repricing moves vs each player&apos;s prior ingested game in the latest
-          cycle.
+          Largest Fair Value moves from each player&apos;s most recent ingested game
+          (within {RECENT_MOVER_MAX_AGE_DAYS} days of the latest league game) — not
+          season-long drift.
         </p>
         <MarketRefreshMeta meta={meta} variant="compact" className="mt-3" />
       </div>
@@ -37,18 +39,18 @@ export function HomeMoversSection({
       <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
         <MoversPanel
           title="Top gainers"
-          subtitle="Positive movers"
+          subtitle="Last game · Fair Value up"
           movers={topGainers}
           direction="gain"
-          emptyMessage="No gainers with prior-game quotes in this snapshot."
+          emptyMessage="No recent-game gainers in this snapshot."
           featured
         />
         <MoversPanel
           title="Top losers"
-          subtitle="Negative movers"
+          subtitle="Last game · Fair Value down"
           movers={topLosers}
           direction="loss"
-          emptyMessage="No losers with prior-game quotes in this snapshot."
+          emptyMessage="No recent-game losers in this snapshot."
           featured
         />
       </div>

@@ -6,12 +6,21 @@ const UNCHANGED_EPSILON = 0.005;
 const TOP_MOVERS_COUNT = 5;
 const TOP_TEAMS_COUNT = 6;
 
+/**
+ * Only rank movers whose last ingested game is within this many calendar days of
+ * the newest game in the dataset. Excludes eliminated / idle players whose
+ * "last game" move is stale even if the % looks huge.
+ */
+export const RECENT_MOVER_MAX_AGE_DAYS = 14;
+
 export type MarketMoverSnapshot = {
   player_id: number;
   ticker: string;
   player_name: string;
   team_abbr: string;
   price_after_game: number;
+  /** Date of the ingested game that produced this move. */
+  game_date: string;
   change_pct: number;
 };
 
@@ -65,6 +74,39 @@ function gameChangePct(row: MarketRow): number | null {
   return v;
 }
 
+function maxGameDateInRows(rows: MarketRow[]): string | null {
+  let max: string | null = null;
+  for (const r of rows) {
+    if (r.game_date && (!max || r.game_date > max)) max = r.game_date;
+  }
+  return max;
+}
+
+function gameAgeDays(gameDate: string, latestGameDate: string): number | null {
+  const d = new Date(`${gameDate}T12:00:00Z`).getTime();
+  const l = new Date(`${latestGameDate}T12:00:00Z`).getTime();
+  if (!Number.isFinite(d) || !Number.isFinite(l)) return null;
+  return (l - d) / 86_400_000;
+}
+
+/** True when the player's latest ingested game is recent enough to rank as a mover. */
+export function isRecentGameMover(
+  row: MarketRow,
+  latestGameDate: string | null,
+): boolean {
+  if (!latestGameDate || !row.game_date) return false;
+  if (row.caution_no_play_current_season) return false;
+  const age = gameAgeDays(row.game_date, latestGameDate);
+  if (age === null || age < 0) return false;
+  return age <= RECENT_MOVER_MAX_AGE_DAYS;
+}
+
+function recentMoverRows(rows: MarketRow[]): MarketRow[] {
+  const latest = maxGameDateInRows(rows);
+  if (!latest) return [];
+  return rows.filter((r) => isRecentGameMover(r, latest));
+}
+
 function toMover(row: MarketRow): MarketMoverSnapshot | null {
   const change = gameChangePct(row);
   if (change === null) return null;
@@ -74,6 +116,7 @@ function toMover(row: MarketRow): MarketMoverSnapshot | null {
     player_name: row.player_name,
     team_abbr: row.team_abbr,
     price_after_game: row.price_after_game,
+    game_date: row.game_date,
     change_pct: change,
   };
 }
@@ -131,9 +174,9 @@ function aggregateTeams(rows: MarketRow[]): TeamPerformanceSnapshot[] {
   return teams;
 }
 
-function computePulse(rows: MarketRow[]): MarketPulseMetrics {
-  const prices = rows.map((r) => r.price_after_game);
-  const movers = rows
+function computePulse(allRows: MarketRow[], recentRows: MarketRow[]): MarketPulseMetrics {
+  const prices = allRows.map((r) => r.price_after_game);
+  const movers = recentRows
     .map(toMover)
     .filter((m): m is MarketMoverSnapshot => m !== null);
 
@@ -194,22 +237,25 @@ function computeBreadth(rows: MarketRow[]): MarketBreadthStats {
 
 /** Derive dashboard analytics from a market board snapshot (pure, memoize at call site). */
 export function computeMarketAnalytics(rows: MarketRow[]): MarketAnalytics {
-  const movers = rows
+  // Movers / breadth use only players with a recent last game so fringe or
+  // eliminated names don't dominate the gainers list with stale % swings.
+  const recentRows = recentMoverRows(rows);
+  const movers = recentRows
     .map(toMover)
     .filter((m): m is MarketMoverSnapshot => m !== null);
 
   const topGainers = [...movers].sort(cmpMoverDesc).slice(0, TOP_MOVERS_COUNT);
   const topLosers = [...movers].sort(cmpMoverAsc).slice(0, TOP_MOVERS_COUNT);
 
-  const teams = aggregateTeams(rows);
+  const teams = aggregateTeams(recentRows);
 
   return {
-    pulse: computePulse(rows),
+    pulse: computePulse(rows, recentRows),
     topGainers,
     topLosers,
     topTeams: teams.slice(0, TOP_TEAMS_COUNT),
     bottomTeams: [...teams].reverse().slice(0, TOP_TEAMS_COUNT),
-    breadth: computeBreadth(rows),
+    breadth: computeBreadth(recentRows),
   };
 }
 

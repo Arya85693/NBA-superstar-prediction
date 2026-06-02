@@ -49,6 +49,7 @@ export function MoverRow({
         <p className={`mt-1 font-mono text-sm font-semibold tabular-nums ${pctClass}`}>
           {formatPct(mover.change_pct)}
         </p>
+        <p className="mt-0.5 text-[11px] text-muted">Last game · {mover.game_date}</p>
       </div>
     </Link>
   );
