@@ -42,7 +42,7 @@ export default async function RadarPage() {
       <PageHeader
         eyebrow="Opportunity radar"
         title="Up next & watch list"
-        description="Players the model flags as breakout candidates (“up next”) and names worth tracking this cycle (“watch out for”). Lists require real playing time this season — deep bench and low-minute players are filtered out. Rankings blend minutes, fair value trends, projection and sentiment levers, and live market price — not a guarantee of real-world performance."
+        description="Curated picks from game logs and market signals. Deep-bench, low-minute players are filtered out."
         marketMeta={meta}
       />
 
@@ -58,41 +58,14 @@ export default async function RadarPage() {
         </div>
       )}
 
-      <section className="mb-12" aria-labelledby="up-next-heading">
-        <h2 id="up-next-heading" className="text-lg font-semibold text-charcoal">
-          Up next <span className="font-normal text-muted-foreground">(top 5)</span>
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Not yet at the top of the board, but in the rotation (about 16+ season
-          minutes, 14+ recent) with forward signals — rising projection, fair value
-          gains, and room to climb before the market fully prices them in.
-        </p>
-        <div className="mt-5">
-          <RadarPickGrid
-            picks={picks.upNext}
-            emptyMessage="No breakout candidates with enough rotation minutes matched this cycle. Check back after more games are ingested."
-          />
-        </div>
-      </section>
+      <RadarPickGrid
+        upNext={picks.upNext}
+        watch={picks.watch}
+        upNextEmpty="No breakout candidates with enough rotation minutes matched this cycle."
+        watchEmpty="No watch-list players with enough minutes matched this cycle."
+      />
 
-      <section className="mb-10" aria-labelledby="watch-heading">
-        <h2 id="watch-heading" className="text-lg font-semibold text-charcoal">
-          Watch out for <span className="font-normal text-muted-foreground">(top 5)</span>
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Momentum and narrative heat for players with meaningful minutes (about
-          12+ season average). Strong projection or sentiment, sharp fair value or
-          market moves, or an unusual gap between price and fundamentals.
-        </p>
-        <div className="mt-5">
-          <RadarPickGrid
-            picks={picks.watch}
-            emptyMessage="No watch-list players with enough minutes matched the filters this cycle."
-          />
-        </div>
-      </section>
-
-      <p className="text-center text-sm text-muted-foreground">
+      <p className="mt-10 text-center text-sm text-muted-foreground">
         Want the full board?{" "}
         <Link href="/market" className="font-medium text-accent hover:text-accent-hover">
           Open player market →
