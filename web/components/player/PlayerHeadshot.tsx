@@ -23,7 +23,7 @@ export function PlayerHeadshot({
 
   return (
     <div
-      className="relative shrink-0 overflow-hidden rounded-2xl border border-border/80 bg-surface-muted shadow-sm"
+      className="relative shrink-0 overflow-hidden rounded-2xl border-2 border-accent bg-surface-muted shadow-sm"
       style={{ width: size, height: size }}
     >
       {showImage && src ? (
