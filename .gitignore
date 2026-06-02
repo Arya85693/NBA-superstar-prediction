@@ -30,3 +30,9 @@ Thumbs.db
 # Market Price state is derived each cycle and published to Supabase (continuity
 # lives in the DB / a local run). Keep this churny artifact out of git.
 data/player_market_state.csv
+
+# Research artifacts (framework code is tracked; outputs are local)
+research/outputs/*
+!research/outputs/.gitkeep
+research/reports/*
+!research/reports/.gitkeep

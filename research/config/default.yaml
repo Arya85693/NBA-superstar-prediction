@@ -1,0 +1,43 @@
+# Default Hoops Stock Market research backtest configuration.
+# Override via CLI: python research/run_backtest.py --config path/to.yaml
+
+name: default_historical_backtest
+
+data:
+  # Resolved relative to repo root if not absolute
+  prices_csv: data/player_game_prices.csv
+  game_logs_csv: data/cleaned_game_logs_with_game_score.csv
+  active_players_csv: data/active_players.csv
+
+horizon:
+  forward_games: 5
+  min_season_games_before_signal: 8
+  require_same_season_forward: true
+  min_minutes_per_forward_game: 1.0
+
+universe:
+  active_players_only: true
+  seasons: []  # empty = all seasons in data
+  min_games_per_player_season: 20
+
+signals:
+  include_fair_value: true
+  include_price_momentum: true
+  include_projection: true
+  simulate_market_layer: true
+  market_prev_carry_forward: true
+
+portfolio:
+  enabled: true
+  rebalance_every_games: 5
+  top_n_holdings: 10
+  bottom_n_short_proxy: 0  # 0 = long-only vs baselines
+  initial_capital: 100000.0
+
+outputs:
+  run_id: null  # auto timestamp if null
+  write_csv: true
+  write_markdown: true
+  write_plots: true
+
+random_seed: 42
