@@ -3,7 +3,17 @@
 export const CHART_ACCENT = "#b76e79";
 export const CHART_ACCENT_RGB = "183 110 121";
 
-export const chartColors = {
+export type ChartColorTokens = {
+  accent: string;
+  grid: string;
+  axis: string;
+  tick: string;
+  tickMuted: string;
+  cursor: string;
+  surface: string;
+};
+
+const chartColorsLight: ChartColorTokens = {
   accent: CHART_ACCENT,
   grid: "rgba(44, 40, 37, 0.07)",
   axis: "rgba(111, 104, 96, 0.28)",
@@ -11,16 +21,39 @@ export const chartColors = {
   tickMuted: "#8a827a",
   cursor: "rgba(111, 104, 96, 0.35)",
   surface: "#fffcfa",
-} as const;
+};
+
+function readCssVar(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+}
+
+export function readChartColorsFromDocument(): ChartColorTokens {
+  return {
+    accent: readCssVar("--chart-accent", chartColorsLight.accent),
+    grid: readCssVar("--chart-grid-stroke", chartColorsLight.grid),
+    axis: readCssVar("--chart-axis", chartColorsLight.axis),
+    tick: readCssVar("--chart-tick", chartColorsLight.tick),
+    tickMuted: readCssVar("--chart-tick-muted", chartColorsLight.tickMuted),
+    cursor: readCssVar("--chart-cursor", chartColorsLight.cursor),
+    surface: readCssVar("--chart-surface", chartColorsLight.surface),
+  };
+}
+
+/** @deprecated Use useChartColors() in client charts for theme-aware colors. */
+export const chartColors = chartColorsLight;
 
 export const chartTypography = {
   tick: {
-    fill: chartColors.tick,
+    fill: chartColorsLight.tick,
     fontSize: 10.5,
     fontWeight: 500,
   },
   tickMono: {
-    fill: chartColors.tick,
+    fill: chartColorsLight.tick,
     fontSize: 10.5,
     fontWeight: 500,
     fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
@@ -28,7 +61,6 @@ export const chartTypography = {
 } as const;
 
 export const chartLayout = {
-  /** Primary player price chart */
   height: 300,
   margin: { top: 6, right: 10, left: 2, bottom: 2 },
   yAxisWidth: 50,
@@ -49,33 +81,4 @@ export const chartLegend = {
   iconSize: 14,
 } as const;
 
-/** Monotone-style cubic path for lightweight SVG sparklines / mini charts. */
-export function buildSmoothSvgPath(points: readonly [number, number][]): string {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M ${points[0]![0]},${points[0]![1]}`;
-
-  let d = `M ${points[0]![0]},${points[0]![1]}`;
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(i - 1, 0)]!;
-    const p1 = points[i]!;
-    const p2 = points[i + 1]!;
-    const p3 = points[Math.min(i + 2, points.length - 1)]!;
-    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
-  }
-  return d;
-}
-
-export function buildSmoothAreaPath(
-  points: readonly [number, number][],
-  baselineY: number,
-): string {
-  if (points.length === 0) return "";
-  const line = buildSmoothSvgPath(points);
-  const last = points[points.length - 1]!;
-  const first = points[0]!;
-  return `${line} L ${last[0]},${baselineY} L ${first[0]},${baselineY} Z`;
-}
+export { buildSmoothAreaPath, buildSmoothSvgPath } from "@/lib/chartPaths";

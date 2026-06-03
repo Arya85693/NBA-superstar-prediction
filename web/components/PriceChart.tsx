@@ -15,13 +15,11 @@ import {
 import { formatUsd } from "@/lib/format";
 import type { MarketChartPoint } from "@/lib/marketChart";
 import {
-  CHART_ACCENT,
-  CHART_ACCENT_RGB,
-  chartColors,
   chartLayout,
   chartLegend,
   chartTypography,
 } from "@/lib/chartTheme";
+import { useChartAccentRgb, useChartColors } from "@/lib/useChartColors";
 
 const MARKET_GRADIENT_ID = "hs-market-area-fill";
 
@@ -107,6 +105,8 @@ export function PriceChart({
     return <p className="text-sm text-muted">No history.</p>;
   }
 
+  const chartColors = useChartColors();
+  const chartAccentRgb = useChartAccentRgb();
   const { height, margin, yAxisWidth, strokeWidth, gridDash, gridOpacity } = chartLayout;
   const plotHeight = height - 8;
 
@@ -129,12 +129,12 @@ export function PriceChart({
             <linearGradient id={MARKET_GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
               <stop
                 offset="0%"
-                stopColor={`rgb(${CHART_ACCENT_RGB})`}
+                stopColor={`rgb(${chartAccentRgb})`}
                 stopOpacity={chartLayout.areaFillTop}
               />
               <stop
                 offset="92%"
-                stopColor={`rgb(${CHART_ACCENT_RGB})`}
+                stopColor={`rgb(${chartAccentRgb})`}
                 stopOpacity={chartLayout.areaFillBottom}
               />
             </linearGradient>
@@ -215,12 +215,12 @@ export function PriceChart({
           <Line
             type="monotone"
             dataKey="market"
-            stroke={CHART_ACCENT}
+            stroke={chartColors.accent}
             strokeWidth={strokeWidth}
             dot={false}
             activeDot={{
               r: 3.5,
-              fill: CHART_ACCENT,
+              fill: chartColors.accent,
               stroke: chartColors.surface,
               strokeWidth: 2,
             }}

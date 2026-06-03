@@ -1,9 +1,4 @@
-import {
-  CHART_ACCENT,
-  CHART_ACCENT_RGB,
-  buildSmoothAreaPath,
-  buildSmoothSvgPath,
-} from "@/lib/chartTheme";
+import { buildSmoothAreaPath, buildSmoothSvgPath } from "@/lib/chartPaths";
 
 /** Lightweight SVG area chart for homepage previews - smooth monotone curve. */
 export function MiniAreaChart({
@@ -38,19 +33,19 @@ export function MiniAreaChart({
       ? "var(--positive)"
       : positive === false
         ? "var(--negative)"
-        : CHART_ACCENT;
+        : "var(--chart-accent)";
   const fillTop =
     positive === true
-      ? "rgb(13 122 95 / 0.14)"
+      ? "color-mix(in srgb, var(--positive) 14%, transparent)"
       : positive === false
-        ? "rgb(196 61 82 / 0.1)"
-        : `rgb(${CHART_ACCENT_RGB} / 0.12)`;
+        ? "color-mix(in srgb, var(--negative) 10%, transparent)"
+        : "rgb(var(--chart-accent-rgb) / 0.12)";
   const fillBottom =
     positive === true
-      ? "rgb(13 122 95 / 0)"
+      ? "color-mix(in srgb, var(--positive) 0%, transparent)"
       : positive === false
-        ? "rgb(196 61 82 / 0)"
-        : `rgb(${CHART_ACCENT_RGB} / 0)`;
+        ? "color-mix(in srgb, var(--negative) 0%, transparent)"
+        : "rgb(var(--chart-accent-rgb) / 0)";
 
   const gradientId = `mini-area-${positive === true ? "up" : positive === false ? "down" : "neutral"}`;
 

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { BrandLogo } from "@/components/BrandLogo";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { formatUsd } from "@/lib/format";
 import { loginHref, signupHref } from "@/lib/authRedirect";
 import { createSupabaseSessionBrowser } from "@/lib/supabase-session-browser";
@@ -156,6 +157,7 @@ export function Nav() {
           )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-5 gap-y-2 border-t border-border/60 pt-2 sm:border-t-0 sm:pt-0">
+          <ThemeToggle />
           <div className="flex items-center gap-2">
             {account === undefined && (
               <span className="text-muted" aria-hidden>

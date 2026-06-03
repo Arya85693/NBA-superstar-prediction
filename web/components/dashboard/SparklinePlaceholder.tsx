@@ -1,4 +1,4 @@
-import { buildSmoothSvgPath } from "@/lib/chartTheme";
+import { buildSmoothSvgPath } from "@/lib/chartPaths";
 
 const BARS = [38, 52, 42, 58, 48, 64, 50, 68, 54, 60];
 

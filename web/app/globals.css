@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   /* Canvas - warm hybrid light */
   --background: #f3efe8;
@@ -50,6 +52,102 @@
   /* Nav */
   --nav-background: rgb(255 252 250 / 0.92);
   --nav-shadow: 0 1px 0 rgb(228 223 216 / 0.9), 0 4px 24px rgb(30 42 58 / 0.06);
+
+  /* Canvas texture */
+  --noise-top: #faf7f2;
+  --noise-bottom: #efe9e1;
+  --band-surface: #faf8f5;
+  --band-highlight: rgb(255 255 255 / 0.85);
+  --band-shadow: rgb(30 42 58 / 0.03);
+  --table-header: rgb(243 240 235 / 0.95);
+  --chart-grid-stroke: rgba(44, 40, 37, 0.07);
+  --chart-accent: #b76e79;
+  --chart-accent-rgb: 183 110 121;
+  --chart-axis: rgba(111, 104, 96, 0.28);
+  --chart-tick: #6f6860;
+  --chart-tick-muted: #8a827a;
+  --chart-cursor: rgba(111, 104, 96, 0.35);
+  --chart-surface: #fffcfa;
+  --inset-highlight: rgb(255 255 255 / 0.7);
+  --card-gradient-end: rgb(243 239 233 / 0.95);
+  --cta-gradient-mid: rgb(243 232 235 / 0.5);
+  --nav-pill-ring: rgb(207 200 191 / 0.6);
+  --premium-border: rgb(207 200 191 / 0.9);
+}
+
+.dark {
+  /* Canvas - warm charcoal, complements cream light mode */
+  --background: #141210;
+  --foreground: #f0ebe3;
+  --charcoal: #e8e3dc;
+  --navy: #a8b8c8;
+  --surface: #1f1c19;
+  --surface-muted: #262320;
+  --surface-inset: #2e2a26;
+  --surface-elevated: #2a2724;
+
+  /* Brand - dusty rose lifted for dark surfaces */
+  --accent: #d48a96;
+  --accent-hover: #e8a0ab;
+  --accent-muted: #3a2a2e;
+  --accent-subtle: #332a2d;
+  --accent-foreground: #141210;
+
+  /* Structure */
+  --border: #3a3530;
+  --border-strong: #4d4842;
+  --border-focus: rgb(212 138 150 / 0.5);
+
+  /* Typography */
+  --muted: #9a938a;
+  --muted-foreground: #b5aea4;
+
+  /* Market semantics */
+  --positive: #4ecfad;
+  --positive-muted: #1a332c;
+  --negative: #f0788a;
+  --negative-muted: #3a2228;
+  --warning: #f0a04a;
+  --warning-muted: #3a2e1f;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.25);
+  --shadow-md: 0 2px 6px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 4px 12px rgb(0 0 0 / 0.5), 0 24px 48px rgb(0 0 0 / 0.4);
+
+  /* Nav */
+  --nav-background: rgb(20 18 16 / 0.92);
+  --nav-shadow: 0 1px 0 rgb(58 53 48 / 0.85), 0 4px 24px rgb(0 0 0 / 0.35);
+
+  /* Canvas texture */
+  --noise-top: #1c1916;
+  --noise-bottom: #12100e;
+  --band-surface: #1a1816;
+  --band-highlight: rgb(255 252 250 / 0.06);
+  --band-shadow: rgb(0 0 0 / 0.25);
+  --table-header: rgb(38 35 32 / 0.96);
+  --chart-grid-stroke: rgba(240, 235, 227, 0.08);
+  --chart-accent: #d48a96;
+  --chart-accent-rgb: 212 138 150;
+  --chart-axis: rgba(181, 174, 164, 0.22);
+  --chart-tick: #9a938a;
+  --chart-tick-muted: #7a736b;
+  --chart-cursor: rgba(181, 174, 164, 0.3);
+  --chart-surface: #2a2724;
+  --inset-highlight: rgb(255 252 250 / 0.05);
+  --card-gradient-end: rgb(38 35 32 / 0.95);
+  --cta-gradient-mid: rgb(58 42 46 / 0.55);
+  --nav-pill-ring: rgb(77 72 66 / 0.7);
+  --premium-border: rgb(77 72 66 / 0.85);
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -129,7 +227,14 @@ body {
   background-image:
     radial-gradient(ellipse 90% 55% at 12% -8%, rgb(183 110 121 / 0.09), transparent 52%),
     radial-gradient(ellipse 55% 40% at 100% 0%, rgb(30 42 58 / 0.05), transparent 48%),
-    linear-gradient(180deg, #faf7f2 0%, var(--background) 38%, #efe9e1 100%);
+    linear-gradient(180deg, var(--noise-top) 0%, var(--background) 38%, var(--noise-bottom) 100%);
+}
+
+.dark .app-noise {
+  background-image:
+    radial-gradient(ellipse 90% 55% at 12% -8%, rgb(212 138 150 / 0.12), transparent 52%),
+    radial-gradient(ellipse 55% 40% at 100% 0%, rgb(168 184 200 / 0.08), transparent 48%),
+    linear-gradient(180deg, var(--noise-top) 0%, var(--background) 38%, var(--noise-bottom) 100%);
 }
 
 @layer components {
@@ -374,7 +479,7 @@ body {
     top: 0;
     z-index: 10;
     border-bottom: 1px solid var(--border);
-    background: rgb(243 240 235 / 0.95);
+    background: var(--table-header);
     backdrop-filter: blur(8px);
   }
 
@@ -420,11 +525,11 @@ body {
     margin-top: 1.75rem;
     padding-top: 2rem;
     padding-bottom: 0.5rem;
-    background-color: #faf8f5;
+    background-color: var(--band-surface);
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     box-shadow:
-      0 -4px 16px rgb(30 42 58 / 0.03),
-      inset 0 1px 0 rgb(255 255 255 / 0.85);
+      0 -4px 16px var(--band-shadow),
+      inset 0 1px 0 var(--band-highlight);
   }
 
   @media (min-width: 768px) {
@@ -447,11 +552,11 @@ body {
     margin-top: 4rem;
     padding-top: 2.5rem;
     padding-bottom: 2rem;
-    background-color: #faf8f5;
+    background-color: var(--band-surface);
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     box-shadow:
-      0 -4px 16px rgb(30 42 58 / 0.03),
-      inset 0 1px 0 rgb(255 255 255 / 0.85);
+      0 -4px 16px var(--band-shadow),
+      inset 0 1px 0 var(--band-highlight);
   }
 
   @media (min-width: 768px) {
@@ -475,8 +580,8 @@ body {
   .hs-hero-market-card {
     border-radius: var(--radius-xl);
     border: 1px solid var(--border);
-    background: linear-gradient(165deg, var(--surface-elevated) 0%, var(--surface) 55%, rgb(243 239 233 / 0.95) 100%);
-    box-shadow: var(--shadow-md), inset 0 1px 0 rgb(255 255 255 / 0.7);
+    background: linear-gradient(165deg, var(--surface-elevated) 0%, var(--surface) 55%, var(--card-gradient-end) 100%);
+    box-shadow: var(--shadow-md), inset 0 1px 0 var(--inset-highlight);
     padding: 1.25rem 1.35rem;
   }
 
@@ -488,7 +593,7 @@ body {
 
   .hs-card-premium {
     box-shadow: var(--shadow-sm);
-    border-color: rgb(207 200 191 / 0.9);
+    border-color: var(--premium-border);
   }
 
   .hs-compact-stat {
@@ -521,7 +626,7 @@ body {
 
   .hs-panel-cta {
     border-radius: var(--radius-xl);
-    background: linear-gradient(135deg, var(--surface) 0%, rgb(243 232 235 / 0.5) 50%, var(--surface-muted) 100%);
+    background: linear-gradient(135deg, var(--surface) 0%, var(--cta-gradient-mid) 50%, var(--surface-muted) 100%);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-md);
   }
@@ -585,7 +690,7 @@ body {
   .hs-nav-pill-active {
     background: var(--surface-elevated);
     color: var(--charcoal);
-    box-shadow: var(--shadow-xs), inset 0 0 0 1px rgb(207 200 191 / 0.6);
+    box-shadow: var(--shadow-xs), inset 0 0 0 1px var(--nav-pill-ring);
   }
 
   /* Charts - premium finance, soft grid, tight plot area */
@@ -602,7 +707,7 @@ body {
   }
 
   .hs-chart-shell .recharts-cartesian-grid-horizontal line {
-    stroke: rgba(44, 40, 37, 0.07);
+    stroke: var(--chart-grid-stroke);
   }
 
   .hs-chart-shell .recharts-legend-item-text {

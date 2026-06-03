@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { Nav } from "@/components/Nav";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { ThemeScript } from "@/components/theme/ThemeScript";
 
 import "./globals.css";
 
@@ -83,9 +85,15 @@ export default function RootLayout({
 
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
 
+      suppressHydrationWarning
+
     >
 
       <body className="app-noise min-h-full flex flex-col bg-background text-foreground">
+
+        <ThemeScript />
+
+        <ThemeProvider>
 
         <a href="#main-content" className="skip-link">
 
@@ -152,6 +160,8 @@ export default function RootLayout({
           </div>
 
         </footer>
+
+        </ThemeProvider>
 
       </body>
 
