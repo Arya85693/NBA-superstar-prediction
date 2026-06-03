@@ -1,29 +1,34 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { RadarPickGrid } from "@/components/radar/RadarPickGrid";
+import { RadarSlateSection } from "@/components/radar/RadarSlateSection";
 import { getMarketMeta, getMarketRows } from "@/lib/marketData";
 import { loadMarketStates } from "@/lib/marketState";
 import { computeRadarPicks } from "@/lib/radarPicks";
+import { getRadarSlate } from "@/lib/radarSlate";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Player radar — up next & watch list",
+  title: "Player radar — slate, up next & watch list",
   description:
-    "Breakout candidates and watch-list players ranked by forward outlook (projection + minutes), with market and sentiment context.",
+    "Upcoming NBA games with forward-outlook highlights, plus breakout candidates and watch-list players ranked by projection and minutes.",
   alternates: { canonical: "/radar" },
 };
 
 export default async function RadarPage() {
   let picks;
   let meta;
+  let slate;
   try {
-    const [rows, states, marketMeta] = await Promise.all([
-      getMarketRows(),
+    const rows = await getMarketRows();
+    const [states, marketMeta, slateResult] = await Promise.all([
       loadMarketStates(),
       getMarketMeta(),
+      getRadarSlate(rows),
     ]);
     meta = marketMeta;
+    slate = slateResult;
     picks = computeRadarPicks(rows, states);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to load data";
@@ -42,7 +47,7 @@ export default async function RadarPage() {
       <PageHeader
         eyebrow="Opportunity radar"
         title="Up next & watch list"
-        description="Curated picks ranked like the research backtest: projection and minutes trend first, then market narrative. Low-minute players are filtered out."
+        description="Upcoming games with standout player outlook, plus curated breakout and watch-list picks from the research backtest."
         marketMeta={meta}
       />
 
@@ -57,6 +62,8 @@ export default async function RadarPage() {
           for full projection and sentiment signals.
         </div>
       )}
+
+      <RadarSlateSection slate={slate} />
 
       <RadarPickGrid
         upNext={picks.upNext}
