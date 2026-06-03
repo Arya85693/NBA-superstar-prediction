@@ -100,7 +100,7 @@ Workflow: `.github/workflows/update-market-prices.yml`
 | `SUPABASE_SERVICE_ROLE_KEY` | **Server only** | Portfolio + trade RPC |
 | `PRICES_SOURCE` | Server | `supabase` for hosted mode |
 | `PRICES_SUPABASE_PAGE_SIZE` | Server | Pagination size (≤ API max rows) |
-| `BALLDONTLIE_API_KEY` | Local pipeline | Not needed on Vercel unless running fetch in preview |
+| `BALLDONTLIE_API_KEY` | Local pipeline; optional on Vercel | Radar slate uses ESPN scoreboard when unset |
 
 **Never** prefix `SUPABASE_SERVICE_ROLE_KEY` with `NEXT_PUBLIC_`.
 
