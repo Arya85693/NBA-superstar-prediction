@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Player radar — up next & watch list",
   description:
-    "Breakout candidates and players to watch, ranked from fair value, projection, sentiment, and market price signals.",
+    "Breakout candidates and watch-list players ranked by forward outlook (projection + minutes), with market and sentiment context.",
   alternates: { canonical: "/radar" },
 };
 
@@ -42,7 +42,7 @@ export default async function RadarPage() {
       <PageHeader
         eyebrow="Opportunity radar"
         title="Up next & watch list"
-        description="Curated picks from game logs and market signals. Deep-bench, low-minute players are filtered out."
+        description="Curated picks ranked like the research backtest: projection and minutes trend first, then market narrative. Low-minute players are filtered out."
         marketMeta={meta}
       />
 

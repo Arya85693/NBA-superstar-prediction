@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseServerClient } from "./supabase";
 import { activePlayersCsvPath, pricesCsvPath } from "./paths";
 import { assignPlayerTickers } from "./playerTicker";
+import { computeForwardOutlookScore } from "./forwardOutlook";
 import { computePlayerMinutesProfile } from "./playerMinutes";
 import { getMarketRevisionInfo, loadMarketStates } from "./marketState";
 import type { MarketMeta, MarketQuote, MarketRow, PriceRow } from "./types";
@@ -669,6 +670,8 @@ async function buildMarketRows(): Promise<MarketRow[]> {
       season_games_with_minutes: 0,
     };
 
+    const minutesFields = minutesProfile ?? minutesDefaults;
+    const projection_score = state?.projection_score ?? null;
     rows.push({
       ...row,
       // price_after_game carries the *current tradable price* (Market Price) so
@@ -681,14 +684,20 @@ async function buildMarketRows(): Promise<MarketRow[]> {
       market_price,
       premium_pct,
       drivers,
-      ...(minutesProfile ?? minutesDefaults),
+      projection_score,
+      forward_outlook_score: 0,
+      ...minutesFields,
     });
   }
 
-  const withTickers: MarketRow[] = rows.map((r) => ({
-    ...r,
-    ticker: b.tickers.get(r.player_id) ?? "????",
-  }));
+  const withTickers: MarketRow[] = rows.map((r) => {
+    const ticker = b.tickers.get(r.player_id) ?? "????";
+    const full: MarketRow = { ...r, ticker };
+    return {
+      ...full,
+      forward_outlook_score: computeForwardOutlookScore(full),
+    };
+  });
 
   withTickers.sort((a, b) => b.market_price - a.market_price);
   return withTickers;

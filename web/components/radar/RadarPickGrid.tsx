@@ -107,7 +107,7 @@ export function RadarPickGrid({
     <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
       <RadarPanel
         title="Up next"
-        subtitle="Top 5 · rotation minutes & breakout signals"
+        subtitle="Top 5 · forward outlook & breakout signals"
         picks={upNext}
         emptyMessage={upNextEmpty}
         featured

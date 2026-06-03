@@ -41,6 +41,13 @@ export type MarketRow = PriceRow & {
   recent_avg_minutes: number;
   /** Count of current-season games with minutes logged. */
   season_games_with_minutes: number;
+  /** Layer 2 projection lever score (neutral ≈ 0). Null when market state unavailable. */
+  projection_score: number | null;
+  /**
+   * Research-aligned forward-improvement outlook in [0, 1] (projection + minutes, penalises
+   * expensive level). Used for Radar and opportunity rankings — not the tradable price.
+   */
+  forward_outlook_score: number;
 };
 
 /** One intraday snapshot appended each market pipeline cycle. */

@@ -13,6 +13,8 @@ const TOP_TEAMS_COUNT = 6;
  */
 export const RECENT_MOVER_MAX_AGE_DAYS = 14;
 
+export type MoverMetricKind = "market_cycle" | "forward_outlook";
+
 export type MarketMoverSnapshot = {
   player_id: number;
   ticker: string;
@@ -21,7 +23,11 @@ export type MarketMoverSnapshot = {
   price_after_game: number;
   /** Date of the ingested game that produced this move. */
   game_date: string;
+  /** Sort/display metric — market % or outlook score×100. */
   change_pct: number;
+  metric_kind: MoverMetricKind;
+  /** 0–1 when metric_kind is forward_outlook. */
+  outlook_score?: number;
 };
 
 export type MarketPulseMetrics = {
@@ -53,8 +59,11 @@ export type MarketBreadthStats = {
 
 export type MarketAnalytics = {
   pulse: MarketPulseMetrics;
+  /** Largest Market Price moves since the prior pipeline cycle (~30 min). */
   topGainers: MarketMoverSnapshot[];
   topLosers: MarketMoverSnapshot[];
+  /** Highest forward-improvement outlook (projection + minutes; backtest-aligned). */
+  topOutlookRisers: MarketMoverSnapshot[];
   topTeams: TeamPerformanceSnapshot[];
   bottomTeams: TeamPerformanceSnapshot[];
   breadth: MarketBreadthStats;
@@ -68,7 +77,13 @@ function median(values: number[]): number {
   return (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
-function gameChangePct(row: MarketRow): number | null {
+function marketChangePct(row: MarketRow): number | null {
+  const v = row.change_pct;
+  if (v === null || Number.isNaN(v)) return null;
+  return v;
+}
+
+function fairValueGameChangePct(row: MarketRow): number | null {
   const v = row.fair_value_change_pct;
   if (v === null || Number.isNaN(v)) return null;
   return v;
@@ -107,9 +122,7 @@ function recentMoverRows(rows: MarketRow[]): MarketRow[] {
   return rows.filter((r) => isRecentGameMover(r, latest));
 }
 
-function toMover(row: MarketRow): MarketMoverSnapshot | null {
-  const change = gameChangePct(row);
-  if (change === null) return null;
+function baseMover(row: MarketRow): Omit<MarketMoverSnapshot, "change_pct" | "metric_kind"> {
   return {
     player_id: row.player_id,
     ticker: row.ticker,
@@ -117,7 +130,26 @@ function toMover(row: MarketRow): MarketMoverSnapshot | null {
     team_abbr: row.team_abbr,
     price_after_game: row.price_after_game,
     game_date: row.game_date,
+  };
+}
+
+function toMarketCycleMover(row: MarketRow): MarketMoverSnapshot | null {
+  const change = marketChangePct(row);
+  if (change === null) return null;
+  return {
+    ...baseMover(row),
     change_pct: change,
+    metric_kind: "market_cycle",
+  };
+}
+
+function toOutlookMover(row: MarketRow): MarketMoverSnapshot {
+  const score = row.forward_outlook_score;
+  return {
+    ...baseMover(row),
+    change_pct: score * 100,
+    metric_kind: "forward_outlook",
+    outlook_score: score,
   };
 }
 
@@ -147,7 +179,7 @@ function classifyMove(changePct: number | null): "up" | "down" | "flat" | "unkno
 function aggregateTeams(rows: MarketRow[]): TeamPerformanceSnapshot[] {
   const byTeam = new Map<string, number[]>();
   for (const row of rows) {
-    const change = gameChangePct(row);
+    const change = marketChangePct(row) ?? fairValueGameChangePct(row);
     if (change === null) continue;
     const list = byTeam.get(row.team_abbr) ?? [];
     list.push(change);
@@ -156,11 +188,12 @@ function aggregateTeams(rows: MarketRow[]): TeamPerformanceSnapshot[] {
 
   const teams: TeamPerformanceSnapshot[] = [];
   for (const [team_abbr, changes] of byTeam) {
-    const sum = changes.reduce((acc, n) => acc + n, 0);
+    const avgChangePct =
+      changes.reduce((acc, n) => acc + n, 0) / changes.length;
     teams.push({
       team_abbr,
-      avgChangePct: sum / changes.length,
-      playerCount: rows.filter((r) => r.team_abbr === team_abbr).length,
+      avgChangePct,
+      playerCount: changes.length,
       withMoveCount: changes.length,
     });
   }
@@ -177,7 +210,7 @@ function aggregateTeams(rows: MarketRow[]): TeamPerformanceSnapshot[] {
 function computePulse(allRows: MarketRow[], recentRows: MarketRow[]): MarketPulseMetrics {
   const prices = allRows.map((r) => r.price_after_game);
   const movers = recentRows
-    .map(toMover)
+    .map(toMarketCycleMover)
     .filter((m): m is MarketMoverSnapshot => m !== null);
 
   const withMove = movers.length;
@@ -216,7 +249,7 @@ function computeBreadth(rows: MarketRow[]): MarketBreadthStats {
     if (row.caution_no_play_current_season) cautionFlagged += 1;
     else activeThisSeason += 1;
 
-    const bucket = classifyMove(gameChangePct(row));
+    const bucket = classifyMove(marketChangePct(row) ?? fairValueGameChangePct(row));
     if (bucket === "unknown") continue;
     withChangeData += 1;
     if (bucket === "up") advancing += 1;
@@ -237,15 +270,22 @@ function computeBreadth(rows: MarketRow[]): MarketBreadthStats {
 
 /** Derive dashboard analytics from a market board snapshot (pure, memoize at call site). */
 export function computeMarketAnalytics(rows: MarketRow[]): MarketAnalytics {
-  // Movers / breadth use only players with a recent last game so fringe or
-  // eliminated names don't dominate the gainers list with stale % swings.
   const recentRows = recentMoverRows(rows);
-  const movers = recentRows
-    .map(toMover)
+
+  const marketMovers = recentRows
+    .map(toMarketCycleMover)
     .filter((m): m is MarketMoverSnapshot => m !== null);
 
-  const topGainers = [...movers].sort(cmpMoverDesc).slice(0, TOP_MOVERS_COUNT);
-  const topLosers = [...movers].sort(cmpMoverAsc).slice(0, TOP_MOVERS_COUNT);
+  const topGainers = [...marketMovers].sort(cmpMoverDesc).slice(0, TOP_MOVERS_COUNT);
+  const topLosers = [...marketMovers].sort(cmpMoverAsc).slice(0, TOP_MOVERS_COUNT);
+
+  const outlookMovers = recentRows
+    .filter((r) => r.projection_score != null && r.forward_outlook_score >= 0.35)
+    .map(toOutlookMover);
+
+  const topOutlookRisers = [...outlookMovers]
+    .sort(cmpMoverDesc)
+    .slice(0, TOP_MOVERS_COUNT);
 
   const teams = aggregateTeams(recentRows);
 
@@ -253,10 +293,19 @@ export function computeMarketAnalytics(rows: MarketRow[]): MarketAnalytics {
     pulse: computePulse(rows, recentRows),
     topGainers,
     topLosers,
+    topOutlookRisers,
     topTeams: teams.slice(0, TOP_TEAMS_COUNT),
     bottomTeams: [...teams].reverse().slice(0, TOP_TEAMS_COUNT),
     breadth: computeBreadth(recentRows),
   };
+}
+
+export function formatMoverMetric(mover: MarketMoverSnapshot): string {
+  if (mover.metric_kind === "forward_outlook") {
+    const n = Math.round((mover.outlook_score ?? 0) * 100);
+    return `Outlook ${n}`;
+  }
+  return formatPct(mover.change_pct);
 }
 
 export function formatRelativeUpdated(iso: string | null | undefined): string {

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class MarketConfig:
     # --- Lever weights: max |adjustment| as a fraction of Fair Value -----------
-    projection_weight: float = 0.06       # ±6% of fair value
+    projection_weight: float = 0.09       # ±9% — forward expectations move price more
     sentiment_weight: float = 0.04        # ±4%
     team_context_weight: float = 0.03     # ±3%
     demand_weight: float = 0.05           # ±5%

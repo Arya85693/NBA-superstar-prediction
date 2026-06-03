@@ -137,21 +137,21 @@ export function MarketIntelligenceDashboard({
         <div>
           <h3 className="dash-section-title">Movement</h3>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Fair Value moves from recent ingested games (within {RECENT_MOVER_MAX_AGE_DAYS}{" "}
-            days of the latest league game)
+            Market Price cycle moves (within {RECENT_MOVER_MAX_AGE_DAYS} days of the latest
+            league game)
           </p>
         </div>
         <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
           <MoversPanel
             title="Top gainers"
-            subtitle="Last game · Fair Value up"
+            subtitle="Market price · cycle gainers"
             movers={topGainers}
             direction="gain"
             emptyMessage="No recent-game gainers in this snapshot."
           />
           <MoversPanel
             title="Top losers"
-            subtitle="Last game · Fair Value down"
+            subtitle="Market price · cycle losers"
             movers={topLosers}
             direction="loss"
             emptyMessage="No recent-game losers in this snapshot."

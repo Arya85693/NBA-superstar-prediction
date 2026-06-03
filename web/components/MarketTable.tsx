@@ -41,6 +41,9 @@ type SortKey =
   | "name"
   | "premium_desc"
   | "premium_asc"
+  | "outlook_desc"
+  | "market_cycle_desc"
+  | "market_cycle_asc"
   | "game_change_desc"
   | "game_change_asc"
   | "date_desc";
@@ -54,6 +57,14 @@ function cmpNullable(a: number | null, b: number | null): number {
 
 function cmpChange(a: MarketRow, b: MarketRow): number {
   return cmpNullable(a.fair_value_change_pct, b.fair_value_change_pct);
+}
+
+function cmpMarketCycle(a: MarketRow, b: MarketRow): number {
+  return cmpNullable(a.change_pct, b.change_pct);
+}
+
+function cmpOutlook(a: MarketRow, b: MarketRow): number {
+  return b.forward_outlook_score - a.forward_outlook_score;
 }
 
 function cmpPremium(a: MarketRow, b: MarketRow): number {
@@ -77,6 +88,15 @@ function sortRows(rows: MarketRow[], key: SortKey): MarketRow[] {
       break;
     case "premium_asc":
       out.sort((a, b) => cmpPremium(a, b));
+      break;
+    case "outlook_desc":
+      out.sort(cmpOutlook);
+      break;
+    case "market_cycle_desc":
+      out.sort((a, b) => cmpMarketCycle(b, a));
+      break;
+    case "market_cycle_asc":
+      out.sort(cmpMarketCycle);
       break;
     case "game_change_desc":
       out.sort((a, b) => cmpChange(b, a));
@@ -249,8 +269,11 @@ export function MarketTable({
           >
             <option value="price_desc">Market price · high → low</option>
             <option value="price_asc">Market price · low → high</option>
-            <option value="game_change_desc">Last game · gainers first</option>
-            <option value="game_change_asc">Last game · losers first</option>
+            <option value="outlook_desc">Forward outlook · highest first</option>
+            <option value="market_cycle_desc">Market cycle · gainers first</option>
+            <option value="market_cycle_asc">Market cycle · losers first</option>
+            <option value="game_change_desc">Last game · fair value gainers</option>
+            <option value="game_change_asc">Last game · fair value losers</option>
             <option value="premium_desc">Premium · highest first</option>
             <option value="premium_asc">Discount · deepest first</option>
             <option value="date_desc">Game date · newest</option>
@@ -346,6 +369,7 @@ export function MarketTable({
                   vs fair value
                 </div>
               </th>
+              <th className="text-right">Outlook</th>
               <th className="text-right" title={CHANGE_VS_PRIOR_GAME_TOOLTIP}>
                 <div>Last game</div>
                 <div className="text-[10px] font-normal normal-case text-muted">
@@ -397,6 +421,9 @@ export function MarketTable({
                       : `${r.premium_pct >= 0 ? "+" : ""}${r.premium_pct.toFixed(1)}%`}
                   </div>
                   <div className="text-xs text-muted">{premiumLabel(r.premium_pct)}</div>
+                </td>
+                <td className="px-4 py-3.5 text-right font-mono tabular-nums text-foreground">
+                  {Math.round(r.forward_outlook_score * 100)}
                 </td>
                 <td
                   className={`px-4 py-3.5 text-right font-mono tabular-nums ${pctCellClass(r.fair_value_change_pct)}`}

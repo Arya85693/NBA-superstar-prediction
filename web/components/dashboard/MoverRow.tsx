@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatUsdNumberOnly } from "@/lib/format";
-import { formatPct } from "@/lib/marketAnalytics";
+import { formatMoverMetric } from "@/lib/marketAnalytics";
 import type { MarketMoverSnapshot } from "@/lib/marketAnalytics";
 import { SparklinePlaceholder } from "./SparklinePlaceholder";
 import { TeamBadge } from "./teamBadge";
@@ -47,9 +47,13 @@ export function MoverRow({
           {formatUsdNumberOnly(mover.price_after_game)}
         </p>
         <p className={`mt-1 font-mono text-sm font-semibold tabular-nums ${pctClass}`}>
-          {formatPct(mover.change_pct)}
+          {formatMoverMetric(mover)}
         </p>
-        <p className="mt-0.5 text-[11px] text-muted">Last game · {mover.game_date}</p>
+        <p className="mt-0.5 text-[11px] text-muted">
+          {mover.metric_kind === "forward_outlook"
+            ? "Forward outlook"
+            : `Market cycle · ${mover.game_date}`}
+        </p>
       </div>
     </Link>
   );

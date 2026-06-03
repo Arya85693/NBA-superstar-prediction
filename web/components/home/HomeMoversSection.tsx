@@ -29,9 +29,9 @@ export function HomeMoversSection({
           className="mt-2 text-sm text-muted-foreground"
           title={CHANGE_VS_PRIOR_GAME_TOOLTIP}
         >
-          Largest Fair Value moves from each player&apos;s most recent ingested game
-          (within {RECENT_MOVER_MAX_AGE_DAYS} days of the latest league game) — not
-          season-long drift.
+          Largest Market Price moves since the prior pipeline cycle (tradable quote),
+          for players with a game within {RECENT_MOVER_MAX_AGE_DAYS} days — like a
+          stock ticker, not season-long drift.
         </p>
         <MarketRefreshMeta meta={meta} variant="compact" className="mt-3" />
       </div>
@@ -39,7 +39,7 @@ export function HomeMoversSection({
       <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
         <MoversPanel
           title="Top gainers"
-          subtitle="Last game · Fair Value up"
+          subtitle="Market price · cycle gainers"
           movers={topGainers}
           direction="gain"
           emptyMessage="No recent-game gainers in this snapshot."
@@ -47,7 +47,7 @@ export function HomeMoversSection({
         />
         <MoversPanel
           title="Top losers"
-          subtitle="Last game · Fair Value down"
+          subtitle="Market price · cycle losers"
           movers={topLosers}
           direction="loss"
           emptyMessage="No recent-game losers in this snapshot."

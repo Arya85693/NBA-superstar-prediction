@@ -1,5 +1,9 @@
 import { isRecentGameMover } from "./marketAnalytics";
 import {
+  computeForwardOutlookScore,
+  minutesOutlookScore,
+} from "./forwardOutlook";
+import {
   meetsUpNextMinutes,
   meetsWatchMinutes,
 } from "./playerMinutes";
@@ -47,18 +51,6 @@ function normPct(pct: number | null, cap = 12): number {
   return clamp01(Math.abs(pct) / cap);
 }
 
-/** 0–1: rewards rotation-level minutes and rising recent usage. */
-function minutesOpportunityScore(row: MarketRow): number {
-  const season = clamp01(row.season_avg_minutes / 32);
-  const recent = clamp01(row.recent_avg_minutes / 32);
-  const trend =
-    row.season_avg_minutes > 0
-      ? clamp01(
-          (row.recent_avg_minutes - row.season_avg_minutes + 6) / 12,
-        )
-      : 0;
-  return 0.45 * season + 0.4 * recent + 0.15 * trend;
-}
 
 function latestGameDate(rows: MarketRow[]): string | null {
   let max: string | null = null;
@@ -160,10 +152,9 @@ function watchReason(row: MarketRow, state: MarketState | undefined): string {
 }
 
 /**
- * Rule-based radar lists from Fair Value + Market Price levers.
- * "Up next" = breakout candidates (not yet top-tier, strong forward signals).
- * "Watch" = momentum, narrative, or unusual market vs fundamentals.
- * Both lists require meaningful minutes — deep bench / low-usage players are excluded.
+ * Rule-based radar lists aligned with backtest levers (projection + minutes).
+ * "Up next" = breakout candidates (not top-15 fair value, strong forward outlook).
+ * "Watch" = narrative heat when outlook, sentiment, or market diverge from fair value.
  */
 export function computeRadarPicks(
   rows: MarketRow[],
@@ -186,33 +177,24 @@ export function computeRadarPicks(
     const proj = state?.projection_score ?? 0;
     const fvMove = row.fair_value_change_pct ?? 0;
     const recent = latest ? isRecentGameMover(row, latest) : false;
-    const minsN = minutesOpportunityScore(row);
-
-    const upside =
-      row.fair_value > 0
-        ? clamp01((FAIR_VALUE_CEILING - row.fair_value) / (FAIR_VALUE_CEILING - FAIR_VALUE_FLOOR))
-        : 0;
+    const minsN = minutesOutlookScore(row);
+    const outlook = computeForwardOutlookScore(row);
 
     let score =
-      0.35 * clamp01((proj + 1) / 2) +
-      0.2 * normPct(fvMove > 0 ? fvMove : 0) +
-      0.15 * upside +
-      0.1 * (recent ? 1 : 0) +
-      0.2 * minsN;
+      0.5 * outlook +
+      0.25 * clamp01((proj + 1) / 2) +
+      0.15 * minsN +
+      0.1 * (recent ? 1 : 0);
 
     if (!state && fvMove > 0) {
-      score =
-        0.4 * normPct(fvMove) +
-        0.2 * upside +
-        0.15 * (recent ? 1 : 0) +
-        0.25 * minsN;
+      score = 0.45 * outlook + 0.3 * normPct(fvMove) + 0.25 * minsN;
     }
 
-    if (score < 0.22) continue;
+    if (score < 0.28) continue;
     upNextScored.push(toPick(row, score, upNextReason(row, state), state));
   }
 
-  upNextScored.sort((a, b) => b.score - a.score || b.fair_value - a.fair_value);
+  upNextScored.sort((a, b) => b.score - a.score);
 
   const watchScored: RadarPick[] = [];
   for (const row of active) {
@@ -225,30 +207,30 @@ export function computeRadarPicks(
     const mkt = row.change_pct;
     const prem = row.premium_pct ?? 0;
     const recent = latest ? isRecentGameMover(row, latest) : false;
-    const minsN = minutesOpportunityScore(row);
+    const minsN = minutesOutlookScore(row);
+    const outlook = computeForwardOutlookScore(row);
 
     const projN = clamp01((proj + 1) / 2);
     const sentN = clamp01((sent + 1) / 2);
-    const fvN = normPct(fv);
     const mktN = normPct(mkt, 3);
     const premN = clamp01(Math.abs(prem) / 8);
 
     let score =
-      0.25 * projN +
+      0.4 * outlook +
+      0.22 * projN +
       0.15 * sentN +
-      0.2 * fvN +
       0.12 * mktN +
-      0.08 * premN +
-      0.2 * minsN;
+      0.06 * premN +
+      0.15 * minsN;
 
-    if (recent && fv != null && Math.abs(fv) > 1) score += 0.08;
-    if (prem > 3 && proj > 0.1) score += 0.05;
+    if (prem > 3 && proj > 0.1) score += 0.04;
+    if (prem < -3 && proj > 0.1) score += 0.06;
 
-    if (score < 0.28) continue;
+    if (score < 0.3) continue;
     watchScored.push(toPick(row, score, watchReason(row, state), state));
   }
 
-  watchScored.sort((a, b) => b.score - a.score || b.market_price - a.market_price);
+  watchScored.sort((a, b) => b.score - a.score);
 
   const upNext = upNextScored.slice(0, UP_NEXT_LIMIT);
   const upIds = new Set(upNext.map((p) => p.player_id));
