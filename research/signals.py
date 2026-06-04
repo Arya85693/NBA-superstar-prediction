@@ -13,6 +13,7 @@ if str(_PIPELINE) not in sys.path:
 
 from market_config import DEFAULT_CONFIG  # noqa: E402
 from market_engine import compute_market_price  # noqa: E402
+from player_aging import PlayerProfile, profile_age_on  # noqa: E402
 from projection_engine import GameStat, compute_projection  # noqa: E402
 
 from config import BacktestConfig  # noqa: E402
@@ -28,6 +29,7 @@ def projection_at_index(
     season_slice: pd.DataFrame,
     idx: int,
     prior_anchor: float | None,
+    player_profile: PlayerProfile | None = None,
 ) -> tuple[float, dict[str, float]]:
     """Projection score using only games 0..idx inclusive (no lookahead)."""
     sub = season_slice.iloc[: idx + 1]
@@ -35,7 +37,15 @@ def projection_at_index(
         GameStat(game_score=float(r.game_score), minutes=float(r.minutes))
         for r in sub.itertuples(index=False)
     ]
-    result = compute_projection(games, prior_season_avg_game_score=prior_anchor)
+    row = season_slice.iloc[idx]
+    ref = pd.to_datetime(row["game_date"]).date()
+    age = profile_age_on(player_profile, ref)
+    result = compute_projection(
+        games,
+        prior_season_avg_game_score=prior_anchor,
+        age=age,
+        position_group=player_profile.position_group if player_profile else None,
+    )
     return float(result.score), dict(result.signals)
 
 
@@ -66,6 +76,7 @@ def simulated_market_price(
 def enrich_season_signals(
     season_df: pd.DataFrame,
     config: BacktestConfig,
+    player_profile: PlayerProfile | None = None,
 ) -> pd.DataFrame:
     """
     Add signal columns to one player-season block (sorted by game_date).
@@ -96,7 +107,7 @@ def enrich_season_signals(
         prev_price = fv
 
         if config.signals.include_projection:
-            score, sigs = projection_at_index(g, i, prior_val)
+            score, sigs = projection_at_index(g, i, prior_val, player_profile)
             proj_scores.append(score)
             proj_recent.append(sigs.get("recent_trend", 0.0))
             proj_long.append(sigs.get("long_form", 0.0))

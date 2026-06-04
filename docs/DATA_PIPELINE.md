@@ -63,6 +63,7 @@ flowchart TD
 | Season window | `season_window.py` | Prior + current season years (unless `--bootstrap-history`) |
 | Fetch logs | `balldontlie_fetch.py` | `data/raw_game_logs.csv` |
 | Active roster | `balldontlie_fetch.save_active_players_bdl()` | `data/active_players.csv` |
+| Player ages / positions | `build_player_profiles.py` (nba_api birth dates) | `data/player_profiles.csv` |
 
 **Alternate path:** `--fetch` uses `data_collection.py` + `nba_api` (deprecated; incompatible player IDs).
 

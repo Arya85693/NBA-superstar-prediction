@@ -40,8 +40,18 @@ def test_minutes_trend_contributes():
     assert rising.signals["minutes_trend"] > 0
 
 
-def test_age_lever_is_dormant_by_default():
+def test_age_lever_boosts_young_center():
     base = compute_projection(_games([15] * 6))
-    aged = compute_projection(_games([15] * 6), age=22.0)
-    assert base.score == aged.score  # AGE_WEIGHT == 0
-    assert proj.AGE_WEIGHT == 0.0
+    young = compute_projection(
+        _games([15] * 6), age=22.0, position_group="C",
+    )
+    assert young.score > base.score
+    assert young.signals["age"] > 0.4
+    assert proj.AGE_WEIGHT > 0
+
+
+def test_age_lever_neutral_at_position_prime():
+    at_peak = compute_projection(
+        _games([15] * 6), age=29.5, position_group="G",
+    )
+    assert abs(at_peak.signals["age"]) < 0.05

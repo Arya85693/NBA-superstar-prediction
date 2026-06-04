@@ -30,21 +30,29 @@ from baselines import (  # noqa: E402
     list_model_signals,
     signal_column,
 )
-from config import BacktestConfig, load_config  # noqa: E402
+from config import REPO_ROOT, BacktestConfig, load_config  # noqa: E402
 from data_loader import load_evaluation_frame  # noqa: E402
 from signals import attach_forward_outcomes, enrich_season_signals  # noqa: E402
+
+_PIPELINE = RESEARCH_ROOT.parent / "pipeline"
+if str(_PIPELINE) not in sys.path:
+    sys.path.insert(0, str(_PIPELINE))
+from player_aging import load_player_profiles_csv  # noqa: E402
 
 from backtests.portfolio import compare_portfolio_strategies  # noqa: E402
 
 
 def build_panel(raw: pd.DataFrame, config: BacktestConfig) -> pd.DataFrame:
     """Full evaluation panel with signals, baselines, and forward labels."""
+    profiles_path = REPO_ROOT / "data" / "player_profiles.csv"
+    profiles = load_player_profiles_csv(profiles_path)
     chunks: list[pd.DataFrame] = []
 
-    for (_, season), season_group in raw.groupby(["player_id", "season"], sort=False):
+    for (player_id, season), season_group in raw.groupby(["player_id", "season"], sort=False):
         if len(season_group) < config.universe.min_games_per_player_season:
             continue
-        enriched = enrich_season_signals(season_group, config)
+        profile = profiles.get(int(player_id))
+        enriched = enrich_season_signals(season_group, config, player_profile=profile)
         labeled = attach_forward_outcomes(enriched, config)
         chunks.append(labeled)
 

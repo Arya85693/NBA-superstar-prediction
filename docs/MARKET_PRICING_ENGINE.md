@@ -144,7 +144,11 @@ Signals (weighted):
 
 Mapped via `tanh(delta / scale)` to [-1, 1].
 
-**Future hook:** `AGE_WEIGHT` dormant until ages ingested.
+**Age / development curve (live):** `player_profiles.csv` supplies birth date and
+position (G/F/C). Peak ages follow MDPI (2024) position splits — Guards **29.5**,
+Forwards **27.5**, Centers **25.5** — with `AGE_WEIGHT = 0.12` so form/minutes
+still dominate. Younger-than-peak players get a modest market premium; past-prime
+a discount (e.g. 22yo center vs ~27yo guard).
 
 ### 5.2 Sentiment (`sentiment_engine.py` + `news_sentiment.py` + `espn_injuries.py`)
 

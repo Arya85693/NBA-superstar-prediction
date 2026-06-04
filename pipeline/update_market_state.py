@@ -46,6 +46,11 @@ from espn_injuries import fetch_injuries, normalize_name  # noqa: E402
 from news_sentiment import fetch_news_sentiment  # noqa: E402
 from market_config import DEFAULT_CONFIG, MarketConfig  # noqa: E402
 from market_engine import compute_market_price  # noqa: E402
+from player_aging import (  # noqa: E402
+    PlayerProfile,
+    load_player_profiles_csv,
+    profile_age_on,
+)
 from projection_engine import GameStat, compute_projection  # noqa: E402
 from sentiment_engine import (  # noqa: E402
     SentimentInput,
@@ -59,6 +64,7 @@ from team_context_engine import (  # noqa: E402
 
 PRICES_CSV = REPO_ROOT / "data" / "player_game_prices.csv"
 ACTIVE_CSV = REPO_ROOT / "data" / "active_players.csv"
+PROFILES_CSV = REPO_ROOT / "data" / "player_profiles.csv"
 MARKET_STATE_CSV = REPO_ROOT / "data" / "player_market_state.csv"
 MARKET_TICKS_CSV = REPO_ROOT / "data" / "player_market_ticks.csv"
 
@@ -82,12 +88,20 @@ def build_player_market_row(
     team_context_input: TeamContextInput | None = None,
     sentiment_input: SentimentInput | None = None,
     prev_sentiment_score: float | None = None,
+    player_profile: PlayerProfile | None = None,
+    age_ref_date: date | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
 ) -> dict[str, Any]:
     """Compute a full player_market_state row for one player (no I/O)."""
+    ref = age_ref_date or date.today()
+    player_age = profile_age_on(player_profile, ref)
     projection = compute_projection(
         season_games,
         prior_season_avg_game_score=prior_season_avg_game_score,
+        age=player_age,
+        position_group=(
+            player_profile.position_group if player_profile else None
+        ),
     )
     # Sentiment: ESPN injuries + RSS news, confidence-scaled by article count.
     sentiment = compute_sentiment(
@@ -282,9 +296,14 @@ def load_active_ids() -> set[int]:
     return out
 
 
+def load_player_profiles() -> dict[int, PlayerProfile]:
+    return load_player_profiles_csv(PROFILES_CSV)
+
+
 def assemble_inputs_for_players(
     df: pd.DataFrame,
     active_ids: set[int],
+    profiles: dict[int, PlayerProfile] | None = None,
 ) -> dict[int, dict[str, Any]]:
     """Latest fair value + current-season game stats + anchor, per active player."""
     out: dict[int, dict[str, Any]] = {}
@@ -301,12 +320,19 @@ def assemble_inputs_for_players(
         ]
         anchor = last.get("prior_season_avg_game_score")
         anchor_val = float(anchor) if pd.notna(anchor) else None
+        last_game_date = last["game_date"]
+        if hasattr(last_game_date, "date"):
+            age_ref = last_game_date.date()
+        else:
+            age_ref = pd.to_datetime(last_game_date).date()
         out[pid] = {
             "player_name": str(last.get("player_name") or ""),
             "team_abbr": str(last.get("team_abbr") or ""),
             "fair_value": float(last["price_after_game"]),
             "season_games": season_games,
             "prior_season_avg_game_score": anchor_val,
+            "player_profile": (profiles or {}).get(pid),
+            "age_ref_date": age_ref,
         }
     return out
 
@@ -465,7 +491,15 @@ def main() -> None:
 
     df = load_fair_value_frame()
     active_ids = load_active_ids()
-    inputs = assemble_inputs_for_players(df, active_ids)
+    profiles = load_player_profiles()
+    if profiles:
+        print(f"  player aging: {len(profiles)} profiles (position-specific primes).")
+    else:
+        print(
+            "  player aging: no player_profiles.csv — age lever neutral. "
+            "Run pipeline/build_player_profiles.py after --active.",
+        )
+    inputs = assemble_inputs_for_players(df, active_ids, profiles=profiles)
     print(f"Market layer: {len(inputs)} active players with Fair Value.")
 
     team_win_pct = compute_team_win_pct(df)
@@ -591,6 +625,8 @@ def main() -> None:
                 team_context_input=team_input,
                 sentiment_input=sentiment_input,
                 prev_sentiment_score=prev_sentiment.get(pid),
+                player_profile=info.get("player_profile"),
+                age_ref_date=info.get("age_ref_date"),
                 config=config,
             )
         )

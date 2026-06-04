@@ -21,6 +21,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Sequence
 
+from player_aging import PositionGroup, age_signal as _position_age_signal
+
 ROOT_TAG = "projection"
 
 # --- Tunables (game-score points / minutes that map to a full-strength signal)
@@ -32,10 +34,10 @@ W_MINUTES_TREND = 0.25     # opportunity (minutes) trending up/down
 GS_SCALE = 8.0             # game-score delta for a ~full signal
 MIN_SCALE = 8.0            # minutes delta for a ~full signal
 
-# Dormant age/development curve. Neutral until age data is wired into the
-# pipeline; kept here so the lever exists the day we have it.
-AGE_PEAK = 27.0
-AGE_WEIGHT = 0.0           # 0 => dormant; raise once ages are ingested
+# Position-aware development curve (see player_aging.py for research peaks).
+# Weight is modest so form/minutes still dominate short-horizon projection.
+AGE_WEIGHT = 0.12
+AGE_SCALE_YEARS = 6.0      # years from peak to saturate the age signal
 
 
 @dataclass
@@ -66,18 +68,11 @@ def _tanh_norm(delta: float, scale: float) -> float:
     return math.tanh(delta / scale)
 
 
-def _age_signal(age: float | None) -> float:
-    """Dormant unless AGE_WEIGHT > 0. Younger-than-peak => mild upside."""
-    if age is None or AGE_WEIGHT <= 0:
-        return 0.0
-    # Linear-ish: peak neutral, younger positive, older negative, bounded.
-    return max(-1.0, min(1.0, (AGE_PEAK - age) / 6.0))
-
-
 def compute_projection(
     games: Sequence[GameStat],
     prior_season_avg_game_score: float | None = None,
     age: float | None = None,
+    position_group: PositionGroup | None = None,
 ) -> ProjectionResult:
     """
     Build a projection score from a player's most recent games (oldest -> newest).
@@ -121,8 +116,11 @@ def compute_projection(
     if recent_min is not None and season_mean_min is not None:
         signals["minutes_trend"] = _tanh_norm(recent_min - season_mean_min, MIN_SCALE)
 
-    # 4) Age / development curve (dormant by default).
-    signals["age"] = _age_signal(age)
+    # 4) Age / development curve (position-specific peak; see player_aging.py).
+    if AGE_WEIGHT > 0:
+        signals["age"] = _position_age_signal(
+            age, position_group, scale_years=AGE_SCALE_YEARS,
+        )
 
     raw = (
         W_RECENT_TREND * signals["recent_trend"]
@@ -131,6 +129,11 @@ def compute_projection(
         + AGE_WEIGHT * signals["age"]
     )
     score = max(-1.0, min(1.0, raw))
+
+    if signals["age"] > 0.2:
+        notes.append("younger than position prime — upside to growth curve")
+    elif signals["age"] < -0.2:
+        notes.append("past position prime — limited growth runway")
 
     if signals["recent_trend"] > 0.15:
         notes.append("recent form above season average")

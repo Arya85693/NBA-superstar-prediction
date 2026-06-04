@@ -144,6 +144,12 @@ def main() -> None:
             import active_players
 
             active_players.save_active_players()
+        try:
+            import build_player_profiles
+
+            build_player_profiles.build_profiles()
+        except Exception as exc:
+            print(f"Warning: player_profiles.csv not refreshed ({exc}).")
 
     print("Pipeline finished OK.")
 
