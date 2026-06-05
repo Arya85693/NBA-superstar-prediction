@@ -243,13 +243,7 @@ export default async function PlayerPage({
             </div>
           </div>
 
-          <h2 className="mb-1 mt-10 text-sm font-medium uppercase tracking-wide text-muted">
-            Market Price history
-          </h2>
-          <p className="mb-4 text-xs text-muted">
-            Tradable quote over time (solid). Fair Value from stats shown dashed when tick
-            history is available.
-          </p>
+          <div className="mt-10">
           <PlayerChartSection
             history={history}
             marketTicks={marketTicks}
@@ -263,6 +257,7 @@ export default async function PlayerPage({
             }}
             marketMeta={marketMeta}
           />
+          </div>
         </div>
 
         <div className="w-full shrink-0 lg:w-80 lg:self-start lg:sticky lg:top-20 lg:z-10">
