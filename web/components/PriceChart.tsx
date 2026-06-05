@@ -94,12 +94,22 @@ function PriceTooltip({
   );
 }
 
+type LineCurve = "monotone" | "stepAfter";
+
 export function PriceChart({
   points,
   showFairValue = true,
+  lineType = "monotone",
+  showAreaFill = true,
+  showGameDots = false,
+  marketLabel = "Market price",
 }: {
   points: MarketChartPoint[];
   showFairValue?: boolean;
+  lineType?: LineCurve;
+  showAreaFill?: boolean;
+  showGameDots?: boolean;
+  marketLabel?: string;
 }) {
   if (points.length === 0) {
     return <p className="text-sm text-muted">No history.</p>;
@@ -190,18 +200,20 @@ export function PriceChart({
               </span>
             )}
           />
-          <Area
-            type="monotone"
-            dataKey="market"
-            stroke="none"
-            fill={`url(#${MARKET_GRADIENT_ID})`}
-            isAnimationActive={false}
-            connectNulls
-            legendType="none"
-          />
+          {showAreaFill ? (
+            <Area
+              type={lineType}
+              dataKey="market"
+              stroke="none"
+              fill={`url(#${MARKET_GRADIENT_ID})`}
+              isAnimationActive={false}
+              connectNulls
+              legendType="none"
+            />
+          ) : null}
           {showFairValue ? (
             <Line
-              type="monotone"
+              type={lineType}
               dataKey="fair"
               stroke={chartColors.tickMuted}
               strokeWidth={1.25}
@@ -213,11 +225,20 @@ export function PriceChart({
             />
           ) : null}
           <Line
-            type="monotone"
+            type={lineType}
             dataKey="market"
             stroke={chartColors.accent}
             strokeWidth={strokeWidth}
-            dot={false}
+            dot={
+              showGameDots
+                ? {
+                    r: 3.5,
+                    fill: chartColors.accent,
+                    stroke: chartColors.surface,
+                    strokeWidth: 1.5,
+                  }
+                : false
+            }
             activeDot={{
               r: 3.5,
               fill: chartColors.accent,
@@ -225,7 +246,7 @@ export function PriceChart({
               strokeWidth: 2,
             }}
             isAnimationActive={false}
-            name="Market price"
+            name={marketLabel}
             connectNulls
             strokeLinecap="round"
             strokeLinejoin="round"

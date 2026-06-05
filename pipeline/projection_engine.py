@@ -145,3 +145,35 @@ def compute_projection(
         notes.append("minutes trending down")
 
     return ProjectionResult(score=score, signals=signals, notes=notes)
+
+
+def boost_projection_on_game_night(
+    projection: ProjectionResult,
+    season_games: Sequence[GameStat],
+) -> ProjectionResult:
+    """
+    Nudge projection after a fresh game lands so market price reacts faster to
+    heating/cooling nights. Symmetric for bust games.
+    """
+    if len(season_games) < 2:
+        return projection
+
+    last = season_games[-1]
+    prior = [g.game_score for g in season_games[:-1]]
+    mean = sum(prior) / len(prior)
+    var = sum((g - mean) ** 2 for g in prior) / len(prior)
+    std = max(var**0.5, 3.0)
+    z = (last.game_score - mean) / std
+    boost = max(-0.35, min(0.35, z * 0.12))
+    if abs(boost) < 0.02:
+        return projection
+
+    boosted = max(-1.0, min(1.0, projection.score + boost))
+    notes = list(projection.notes)
+    if boost > 0:
+        notes.insert(0, "last game well above recent baseline")
+    else:
+        notes.insert(0, "last game well below recent baseline")
+    signals = dict(projection.signals)
+    signals["game_night_boost"] = boost
+    return ProjectionResult(score=boosted, signals=signals, notes=notes)

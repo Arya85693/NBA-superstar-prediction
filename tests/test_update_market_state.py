@@ -185,9 +185,9 @@ def test_no_injury_sentiment_is_neutral():
 
 
 def test_sentiment_smoothing_blends_with_prev():
-    # Fresh sentiment 0.0, prev -0.8, default smoothing 0.5 => -0.4 stored.
+    # Fresh sentiment 0.0, prev -0.8, smoothing 0.6 => -0.32 stored.
     row = _row(prev=100.0, sentiment_input=None, prev_sentiment_score=-0.8)
-    assert abs(row["sentiment_score"] - (-0.4)) < 1e-6
+    assert abs(row["sentiment_score"] - (-0.32)) < 1e-6
 
 
 def test_sentiment_smoothing_dampens_a_spike():
@@ -203,6 +203,27 @@ def test_news_headline_appears_in_explanation_drivers():
     row = _row(prev=100.0, sentiment_input=si)
     drivers = row["explanation"]["drivers"]
     assert any("Star drops 40" in d for d in drivers)
+
+
+def test_game_night_event_mode_moves_price_further():
+    hot_games = [GameStat(12.0, 30.0) for _ in range(5)] + [GameStat(35.0, 36.0)]
+    normal = _row(prev=100.0, fv=115.0, games=hot_games)
+    event = build_player_market_row(
+        player_id=2544,
+        player_name="Test Player",
+        team_abbr="LAL",
+        fair_value=115.0,
+        prev_market_price=100.0,
+        season_games=hot_games,
+        prior_season_avg_game_score=14.0,
+        demand_trades=None,
+        as_of_date="2026-01-01",
+        event_mode=True,
+    )
+    assert event["market_price"] >= normal["market_price"]
+    assert any(
+        "Game-night" in d for d in event["explanation"]["drivers"]
+    )
 
 
 def test_confidence_dampens_single_article_in_row():

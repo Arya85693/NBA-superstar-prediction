@@ -31,9 +31,13 @@ DATA_DIR = ROOT / "data"
 INPUT_CSV = DATA_DIR / "cleaned_game_logs_with_game_score.csv"
 OUTPUT_CSV = DATA_DIR / "player_game_prices.csv"
 
-ALPHA = 0.25
+ALPHA = 0.30
 EARLY_GAMES_THRESHOLD = 5
 EARLY_ALPHA_MULTIPLIER = 0.5
+SURPRISE_Z_CAP = 2.0
+SURPRISE_ALPHA_MULT = 0.5
+SURPRISE_Z_WEIGHT_THRESHOLD = 1.5
+WEIGHT_TONIGHT_SURPRISE = 0.40
 
 PRICE_MIN = 45.0
 PRICE_MAX = 185.0
@@ -203,11 +207,42 @@ def minutes_factor(minutes: float) -> float:
     return max(MIN_MINUTES_FACTOR, min(MAX_MINUTES_FACTOR, r))
 
 
+def _season_std(prior_game_scores: list[float]) -> float:
+    if len(prior_game_scores) < 2:
+        return 8.0
+    mean = sum(prior_game_scores) / len(prior_game_scores)
+    var = sum((g - mean) ** 2 for g in prior_game_scores) / len(prior_game_scores)
+    return max(var**0.5, 3.0)
+
+
+def surprise_z_score(tonight_gs: float, prior_game_scores: list[float]) -> float:
+    """Z-score of tonight vs prior games this season (0 when no prior sample)."""
+    if not prior_game_scores:
+        return 0.0
+    mean = sum(prior_game_scores) / len(prior_game_scores)
+    return (tonight_gs - mean) / _season_std(prior_game_scores)
+
+
+def effective_alpha(
+    base_alpha: float,
+    games_in_season: int,
+    surprise_z: float,
+) -> float:
+    early = (
+        EARLY_ALPHA_MULTIPLIER
+        if games_in_season <= EARLY_GAMES_THRESHOLD
+        else 1.0
+    )
+    surprise_boost = 1.0 + min(abs(surprise_z), SURPRISE_Z_CAP) * SURPRISE_ALPHA_MULT
+    return base_alpha * early * surprise_boost
+
+
 def smoothing_target_live(
     game_score: float,
     minutes: float,
     prior_year_mean_gs: float | None,
     season_to_date_mean_gs: float,
+    surprise_z: float = 0.0,
 ) -> float:
     """
     Blend tonight, last year's average (anchor), and **this season's average so far**
@@ -216,15 +251,21 @@ def smoothing_target_live(
     p_game = game_score_to_price(game_score * minutes_factor(minutes))
     p_season = game_score_to_price(season_to_date_mean_gs)
 
+    w_tonight = (
+        WEIGHT_TONIGHT_SURPRISE
+        if abs(surprise_z) >= SURPRISE_Z_WEIGHT_THRESHOLD
+        else WEIGHT_TONIGHT
+    )
+
     if prior_year_mean_gs is not None and not (prior_year_mean_gs != prior_year_mean_gs):
         p_prior = game_score_to_price(float(prior_year_mean_gs))
-        return (
-            WEIGHT_TONIGHT * p_game
-            + WEIGHT_PRIOR_YEAR * p_prior
-            + WEIGHT_SEASON_AVG * p_season
-        )
+        remainder = 1.0 - w_tonight
+        w_prior = remainder * (WEIGHT_PRIOR_YEAR / (WEIGHT_PRIOR_YEAR + WEIGHT_SEASON_AVG))
+        w_season = remainder * (WEIGHT_SEASON_AVG / (WEIGHT_PRIOR_YEAR + WEIGHT_SEASON_AVG))
+        return w_tonight * p_game + w_prior * p_prior + w_season * p_season
 
-    return 0.48 * p_game + 0.52 * p_season
+    w_season = 1.0 - w_tonight
+    return w_tonight * p_game + w_season * p_season
 
 
 def compute_prices(
@@ -276,6 +317,7 @@ def compute_prices(
         ipo_this_season = DEFAULT_IPO_PRICE
         games_in_season = 0
         season_gs_sum = 0.0
+        season_gs_history: list[float] = []
 
         for _, row in g.iterrows():
             sea = str(row["season"])
@@ -288,19 +330,20 @@ def compute_prices(
                 current_season = sea
                 games_in_season = 0
                 season_gs_sum = 0.0
+                season_gs_history = []
                 ipo_this_season = ipo_map.get((int(pid), sea), DEFAULT_IPO_PRICE)
                 price = ipo_this_season
 
+            surprise_z = surprise_z_score(gs, season_gs_history)
             games_in_season += 1
             season_gs_sum += gs
             season_avg_gs = season_gs_sum / games_in_season
+            season_gs_history.append(gs)
 
-            alpha_eff = alpha * (
-                EARLY_ALPHA_MULTIPLIER
-                if games_in_season <= EARLY_GAMES_THRESHOLD
-                else 1.0
+            alpha_eff = effective_alpha(alpha, games_in_season, surprise_z)
+            target = smoothing_target_live(
+                gs, mins, prior_val, season_avg_gs, surprise_z=surprise_z,
             )
-            target = smoothing_target_live(gs, mins, prior_val, season_avg_gs)
             price = (1.0 - alpha_eff) * price + alpha_eff * target
             price = min(PRICE_CEILING, max(PRICE_FLOOR, price))
             prices.append(price)

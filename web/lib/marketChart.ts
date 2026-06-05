@@ -206,6 +206,50 @@ export function buildChartPointsFromGames(
   return downsample(out, MAX_CHART_POINTS);
 }
 
+/** One point per played game — step spikes on game nights (performance view). */
+export function buildGameNightChartPoints(
+  history: PriceRow[],
+  range: ChartRange,
+  endAt?: string | null,
+): MarketChartPoint[] {
+  if (history.length === 0) return [];
+
+  const played = history.filter(
+    (r) =>
+      typeof r.game_score === "number" &&
+      Number.isFinite(r.game_score) &&
+      (r.minutes ?? 0) > 0,
+  );
+  if (played.length === 0) return [];
+
+  const sorted = [...played].sort(
+    (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime(),
+  );
+  const endIso = chartEndIso(endAt, sorted[sorted.length - 1]!.game_date);
+  const endMs = parseInstant(`${endIso}T23:59:59Z`);
+  const startMs = endMs - CHART_RANGE_DAYS[range] * 86_400_000;
+
+  const points = sorted
+    .filter((row) => {
+      const day = row.game_date.slice(0, 10);
+      const ms = parseInstant(`${day}T12:00:00Z`);
+      return inWindow(ms, startMs, endMs);
+    })
+    .map((row) => {
+      const day = row.game_date.slice(0, 10);
+      const price = row.price_after_game;
+      return toChartPoint(
+        `${day}T12:00:00Z`,
+        price,
+        price,
+        true,
+        row.game_score,
+      );
+    });
+
+  return downsample(points, MAX_CHART_POINTS);
+}
+
 function augmentEndPoint(
   out: MarketChartPoint[],
   currentMarket:

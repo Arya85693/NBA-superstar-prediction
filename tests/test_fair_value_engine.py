@@ -36,3 +36,28 @@ def test_smoothing_target_blend_weights_sum_to_one():
     assert abs(
         pe.WEIGHT_TONIGHT + pe.WEIGHT_PRIOR_YEAR + pe.WEIGHT_SEASON_AVG - 1.0
     ) < 1e-9
+
+
+def test_surprise_night_increases_effective_alpha():
+    mild = pe.effective_alpha(pe.ALPHA, games_in_season=10, surprise_z=0.2)
+    hot = pe.effective_alpha(pe.ALPHA, games_in_season=10, surprise_z=2.5)
+    assert hot > mild
+
+
+def test_surprise_game_moves_price_more_than_flat_line():
+    import pandas as pd
+
+    base = {
+        "player_id": [1, 1],
+        "player_name": ["A", "A"],
+        "team_abbr": ["LAL", "LAL"],
+        "game_date": ["2025-10-01", "2025-10-03"],
+        "season": ["2025-26", "2025-26"],
+        "game_id": [1, 2],
+        "minutes": [32.0, 34.0],
+        "game_score": [14.0, 38.0],
+    }
+    priced = pe.compute_prices(pd.DataFrame(base))
+    p1 = float(priced.iloc[0]["price_after_game"])
+    p2 = float(priced.iloc[1]["price_after_game"])
+    assert p2 - p1 > 4.0

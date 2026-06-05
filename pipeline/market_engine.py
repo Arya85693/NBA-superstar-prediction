@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from demand_engine import DemandResult, compute_demand
-from market_config import DEFAULT_CONFIG, MarketConfig, clamp
+from market_config import DEFAULT_CONFIG, MarketConfig, clamp, cycle_limits
 from projection_engine import ProjectionResult
 from sentiment_engine import SentimentResult
 from team_context_engine import TeamContextResult
@@ -97,6 +97,7 @@ def compute_market_price(
     team_context: TeamContextResult | None = None,
     demand: DemandResult | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
+    event_mode: bool = False,
 ) -> MarketPriceResult:
     """
     Compute the new Market Price for one player. All lever args are optional and
@@ -156,8 +157,10 @@ def compute_market_price(
 
     prev = clamp(float(prev_market_price), config.price_floor, config.price_ceiling)
 
+    move_cap, reversion = cycle_limits(config, event_mode=event_mode)
+
     # Mean reversion: close a fraction of the gap toward the target each cycle.
-    reverted = prev + config.reversion_rate * (target_price - prev)
+    reverted = prev + reversion * (target_price - prev)
 
     # Per-cycle movement cap relative to previous price (anti-pump / anti-dump).
     # This is the FINAL, binding per-cycle constraint: price never moves more than
@@ -166,8 +169,8 @@ def compute_market_price(
     # Market Price catches up smoothly over several cycles (rate-limited here)
     # rather than gapping — and converges into the band because the target sits
     # inside it.
-    max_up = prev * (1.0 + config.max_move_per_cycle)
-    max_down = prev * (1.0 - config.max_move_per_cycle)
+    max_up = prev * (1.0 + move_cap)
+    max_down = prev * (1.0 - move_cap)
     capped = clamp(reverted, max_down, max_up)
     move_capped = abs(reverted - capped) > 1e-9
 
@@ -189,7 +192,9 @@ def compute_market_price(
         premium_capped=premium_capped,
         levers=levers,
     )
-    result.drivers = _build_drivers(result, projection, sentiment, dem, seeded=False)
+    result.drivers = _build_drivers(
+        result, projection, sentiment, dem, seeded=False, event_mode=event_mode,
+    )
     return result
 
 
@@ -200,8 +205,14 @@ def _build_drivers(
     demand: DemandResult,
     *,
     seeded: bool,
+    event_mode: bool = False,
 ) -> list[str]:
     drivers: list[str] = []
+
+    if event_mode:
+        drivers.append(
+            "Game-night cycle — faster catch-up after new stats were ingested.",
+        )
 
     proj_reason = None
     if projection and projection.notes:

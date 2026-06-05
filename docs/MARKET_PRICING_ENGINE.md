@@ -94,11 +94,13 @@ flowchart TD
 | Team context | ±3% | Current-season team win% from game results |
 | Demand | ±5% | Recency-weighted net shares; per-portfolio cap 150 shares |
 
-**Combined premium cap:** ±15% (`max_premium`) even if raw sum exceeds.
+**Combined premium cap:** ±20% (`max_premium`) even if raw sum exceeds.
 
-**Movement cap:** ±8% per cycle (`max_move_per_cycle`) vs previous market price.
+**Movement cap:** ±10% per normal cycle (`max_move_per_cycle`); ±18% on **game-night**
+cycles when fair value jumps ≥2% vs the last published state (`event_max_move_per_cycle`).
 
-**Mean reversion:** `reversion_rate = 0.34` closes 34% of gap to target each ~30 min cycle.
+**Mean reversion:** `reversion_rate = 0.45` normally; `event_reversion_rate = 0.70` after
+new games ingest so market price catches up faster while demand caps still apply.
 
 ---
 

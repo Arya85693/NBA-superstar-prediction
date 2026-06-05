@@ -47,6 +47,14 @@ def test_per_cycle_move_is_capped():
     assert r.move_capped is True
 
 
+def test_event_mode_allows_larger_single_cycle_move():
+    normal = compute_market_price(200.0, 100.0, config=CFG, event_mode=False)
+    event = compute_market_price(200.0, 100.0, config=CFG, event_mode=True)
+    assert event.market_price > normal.market_price
+    assert event.market_price <= 100.0 * (1.0 + CFG.event_max_move_per_cycle) + 1e-6
+    assert any("Game-night" in d for d in event.drivers)
+
+
 def test_absolute_price_clamp():
     r = compute_market_price(10_000.0, None, config=CFG)
     assert r.market_price <= CFG.price_ceiling

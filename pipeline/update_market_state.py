@@ -44,14 +44,22 @@ if str(_PIPELINE_DIR) not in sys.path:
 from demand_engine import build_demand_window, compute_demand  # noqa: E402
 from espn_injuries import fetch_injuries, normalize_name  # noqa: E402
 from news_sentiment import fetch_news_sentiment  # noqa: E402
-from market_config import DEFAULT_CONFIG, MarketConfig  # noqa: E402
+from market_config import (  # noqa: E402
+    DEFAULT_CONFIG,
+    MarketConfig,
+    is_game_night_event,
+)
 from market_engine import compute_market_price  # noqa: E402
 from player_aging import (  # noqa: E402
     PlayerProfile,
     load_player_profiles_csv,
     profile_age_on,
 )
-from projection_engine import GameStat, compute_projection  # noqa: E402
+from projection_engine import (  # noqa: E402
+    GameStat,
+    boost_projection_on_game_night,
+    compute_projection,
+)
 from sentiment_engine import (  # noqa: E402
     SentimentInput,
     SentimentResult,
@@ -91,6 +99,7 @@ def build_player_market_row(
     player_profile: PlayerProfile | None = None,
     age_ref_date: date | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
+    event_mode: bool = False,
 ) -> dict[str, Any]:
     """Compute a full player_market_state row for one player (no I/O)."""
     ref = age_ref_date or date.today()
@@ -103,6 +112,8 @@ def build_player_market_row(
             player_profile.position_group if player_profile else None
         ),
     )
+    if event_mode:
+        projection = boost_projection_on_game_night(projection, season_games)
     # Sentiment: ESPN injuries + RSS news, confidence-scaled by article count.
     sentiment = compute_sentiment(
         sentiment_input,
@@ -130,6 +141,7 @@ def build_player_market_row(
         team_context=team_context,
         demand=demand,
         config=config,
+        event_mode=event_mode,
     )
 
     levers = result.levers
@@ -340,16 +352,19 @@ def assemble_inputs_for_players(
 # ---------------------------------------------------------------------------
 # Supabase I/O
 # ---------------------------------------------------------------------------
-def fetch_prev_market_state(client) -> tuple[dict[int, float], dict[int, float]]:
-    """Returns (prev_market_price, prev_sentiment_score) maps for continuity."""
+def fetch_prev_market_state(
+    client,
+) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
+    """Returns (prev_market_price, prev_sentiment_score, prev_fair_value) maps."""
     prices: dict[int, float] = {}
     sentiments: dict[int, float] = {}
+    fair_values: dict[int, float] = {}
     page = 1000
     start = 0
     while True:
         resp = (
             client.table("player_market_state")
-            .select("player_id, market_price, sentiment_score")
+            .select("player_id, market_price, sentiment_score, fair_value")
             .range(start, start + page - 1)
             .execute()
         )
@@ -367,10 +382,15 @@ def fetch_prev_market_state(client) -> tuple[dict[int, float], dict[int, float]]
                     sentiments[pid] = float(r["sentiment_score"])
             except (TypeError, ValueError):
                 pass
+            try:
+                if r.get("fair_value") is not None:
+                    fair_values[pid] = float(r["fair_value"])
+            except (TypeError, ValueError):
+                pass
         if len(data) < page:
             break
         start += page
-    return prices, sentiments
+    return prices, sentiments, fair_values
 
 
 def fetch_recent_trades(client, window_days: int) -> dict[int, list[dict]]:
@@ -543,6 +563,7 @@ def main() -> None:
     client = None
     prev_prices: dict[int, float] = {}
     prev_sentiment: dict[int, float] = {}
+    prev_fair_values: dict[int, float] = {}
     trades_by_player: dict[int, list[dict]] = {}
 
     if url and key:
@@ -550,7 +571,9 @@ def main() -> None:
 
         client = create_client(url, key)
         try:
-            prev_prices, prev_sentiment = fetch_prev_market_state(client)
+            prev_prices, prev_sentiment, prev_fair_values = fetch_prev_market_state(
+                client,
+            )
             print(f"  loaded {len(prev_prices)} previous Market Prices.")
         except Exception as e:  # noqa: BLE001 - first run before table exists
             print(f"  (no previous Market Price state yet: {e})")
@@ -574,8 +597,13 @@ def main() -> None:
                         prev_sentiment[int(r.player_id)] = float(r.sentiment_score)
                     except (TypeError, ValueError):
                         pass
+                try:
+                    prev_fair_values[int(r.player_id)] = float(r.fair_value)
+                except (TypeError, ValueError, AttributeError):
+                    pass
         print("  SUPABASE creds not set — local CSV-only run (demand defaults to 0).")
 
+    event_count = 0
     rows: list[dict[str, Any]] = []
     for pid, info in inputs.items():
         team_abbr = info["team_abbr"]
@@ -611,6 +639,14 @@ def main() -> None:
                 top_headline=top_headline,
             )
 
+        event_mode = is_game_night_event(
+            info["fair_value"],
+            prev_fair_values.get(pid),
+            threshold=config.event_fair_value_jump_threshold,
+        )
+        if event_mode:
+            event_count += 1
+
         rows.append(
             build_player_market_row(
                 player_id=pid,
@@ -628,8 +664,12 @@ def main() -> None:
                 player_profile=info.get("player_profile"),
                 age_ref_date=info.get("age_ref_date"),
                 config=config,
+                event_mode=event_mode,
             )
         )
+
+    if event_count:
+        print(f"  game-night event mode: {event_count} players (fair value jump).")
 
     write_local_csv(rows)
     recorded_at = datetime.now(timezone.utc).isoformat()
