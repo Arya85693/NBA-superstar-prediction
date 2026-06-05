@@ -147,9 +147,11 @@ def main() -> None:
         try:
             import build_player_profiles
 
-            build_player_profiles.build_profiles()
+            # Birth dates are static — age is computed at market time from birth_date.
+            # Only fetch profiles for new roster ids (committed CSV keeps CI fast).
+            build_player_profiles.ensure_profiles_for_active()
         except Exception as exc:
-            print(f"Warning: player_profiles.csv not refreshed ({exc}).")
+            print(f"Warning: player_profiles sync skipped ({exc}).")
 
     print("Pipeline finished OK.")
 
