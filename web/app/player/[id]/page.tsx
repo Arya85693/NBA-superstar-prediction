@@ -6,9 +6,7 @@ import { MarketRefreshMeta } from "@/components/market/MarketRefreshMeta";
 import { MarketExplainCard } from "@/components/player/MarketExplainCard";
 import { PlayerHeadshot } from "@/components/player/PlayerHeadshot";
 import { PlayerInsightsPanel } from "@/components/player/PlayerInsightsPanel";
-import { PlayerDetailTabs } from "@/components/player/PlayerDetailTabs";
-import { computePlayerMinutesProfile } from "@/lib/playerMinutes";
-import { getMarketStateForPlayer } from "@/lib/marketState";
+import { PlayerChartSection } from "@/components/PlayerChartSection";
 import { TradePanel } from "@/components/TradePanel";
 import { formatUsd } from "@/lib/format";
 import {
@@ -63,7 +61,6 @@ export default async function PlayerPage({
   const [
     quote,
     market,
-    marketState,
     history,
     marketTicks,
     marketDaily,
@@ -73,7 +70,6 @@ export default async function PlayerPage({
   ] = await Promise.all([
     latestForPlayer(playerId),
     getMarketQuote(playerId),
-    getMarketStateForPlayer(playerId),
     getPlayerHistory(playerId),
     getMarketTicksForPlayer(playerId),
     getMarketDailyHistoryForPlayer(playerId),
@@ -103,7 +99,6 @@ export default async function PlayerPage({
   );
 
   const priorAnchor = quote.prior_season_avg_game_score;
-  const minutesProfile = computePlayerMinutesProfile(history, quote.season);
   const seasonLabel = marketMeta.current_dataset_season;
   const cautionNoPlayCurrent = !playedCurrentSeason && Boolean(seasonLabel);
   const cautionTitle = seasonLabel
@@ -248,7 +243,14 @@ export default async function PlayerPage({
             </div>
           </div>
 
-          <PlayerDetailTabs
+          <h2 className="mb-1 mt-10 text-sm font-medium uppercase tracking-wide text-muted">
+            Market Price history
+          </h2>
+          <p className="mb-4 text-xs text-muted">
+            Tradable quote over time (solid). Fair Value from stats shown dashed when tick
+            history is available.
+          </p>
+          <PlayerChartSection
             history={history}
             marketTicks={marketTicks}
             marketDaily={marketDaily}
@@ -260,13 +262,6 @@ export default async function PlayerPage({
               recordedAt: marketMeta.market_updated_at ?? null,
             }}
             marketMeta={marketMeta}
-            quote={quote}
-            marketQuote={market}
-            marketState={marketState}
-            seasonAvgMinutes={minutesProfile?.season_avg_minutes ?? 0}
-            recentAvgMinutes={minutesProfile?.recent_avg_minutes ?? 0}
-            seasonGamesWithMinutes={minutesProfile?.season_games_with_minutes ?? 0}
-            lastGameMinutes={minutesProfile?.last_game_minutes ?? 0}
           />
         </div>
 
