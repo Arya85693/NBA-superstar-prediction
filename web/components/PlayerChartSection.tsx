@@ -172,7 +172,7 @@ export function PlayerChartSection({
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/90 bg-gradient-to-b from-surface to-surface-muted/50 p-4 shadow-sm sm:p-5">
           {view === "performance" ? (
-            <PerformanceGameChart points={performancePoints} />
+            <PerformanceGameChart points={performancePoints} range={range} />
           ) : (
             <>
               <p className="mb-3 text-xs text-muted">

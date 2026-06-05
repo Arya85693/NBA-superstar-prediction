@@ -15,23 +15,31 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { formatUsd } from "@/lib/format";
-import type { MarketChartPoint } from "@/lib/marketChart";
+import type { ChartRange, MarketChartPoint } from "@/lib/marketChart";
 import { chartLayout, chartLegend, chartTypography } from "@/lib/chartTheme";
 import { useChartAccentRgb, useChartColors } from "@/lib/useChartColors";
 
 const FILL_GRADIENT_ID = "hs-performance-area-fill";
+const WEEK_SPARK_GRADIENT_ID = "hs-week-spark-fill";
 
 type EnrichedPoint = MarketChartPoint & {
   price: number;
   gmsc: number;
   priceDelta: number | null;
   moveUp: boolean | null;
+  shortDate: string;
 };
 
 function formatAxisDate(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatShortDate(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function formatTooltipDate(iso: string) {
@@ -55,8 +63,28 @@ function enrichPoints(points: MarketChartPoint[]): EnrichedPoint[] {
       gmsc: p.gs ?? 0,
       priceDelta,
       moveUp: priceDelta == null ? null : priceDelta >= 0,
+      shortDate: formatShortDate(p.date),
     };
   });
+}
+
+function computeStats(data: EnrichedPoint[]) {
+  if (data.length < 2) return null;
+  const first = data[0]!.price;
+  const last = data[data.length - 1]!.price;
+  let bestJump = -Infinity;
+  let worstJump = Infinity;
+  for (let i = 1; i < data.length; i++) {
+    const d = data[i]!.priceDelta ?? 0;
+    if (d > bestJump) bestJump = d;
+    if (d < worstJump) worstJump = d;
+  }
+  return {
+    change: last - first,
+    games: data.length,
+    bestJump: Number.isFinite(bestJump) ? bestJump : 0,
+    worstJump: Number.isFinite(worstJump) ? worstJump : 0,
+  };
 }
 
 function PerformanceTooltip({ active, payload }: TooltipContentProps) {
@@ -98,36 +126,216 @@ function PerformanceTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-export function PerformanceGameChart({ points }: { points: MarketChartPoint[] }) {
+function StatsStrip({ stats, compact = false }: { stats: ReturnType<typeof computeStats>; compact?: boolean }) {
+  if (!stats) return null;
+
+  if (compact) {
+    return (
+      <dl className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Week move
+          </dt>
+          <dd
+            className={`mt-1 font-mono text-sm tabular-nums ${
+              stats.change > 0
+                ? "text-positive"
+                : stats.change < 0
+                  ? "text-negative"
+                  : "text-foreground"
+            }`}
+          >
+            {stats.change >= 0 ? "+" : ""}
+            {formatUsd(stats.change)}
+          </dd>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Games played
+          </dt>
+          <dd className="mt-1 font-mono text-sm tabular-nums text-foreground">
+            {stats.games}
+          </dd>
+        </div>
+      </dl>
+    );
+  }
+
+  return (
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
+        <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+          Period move
+        </dt>
+        <dd
+          className={`mt-1 font-mono text-sm tabular-nums ${
+            stats.change > 0
+              ? "text-positive"
+              : stats.change < 0
+                ? "text-negative"
+                : "text-foreground"
+          }`}
+        >
+          {stats.change >= 0 ? "+" : ""}
+          {formatUsd(stats.change)}
+        </dd>
+      </div>
+      <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
+        <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+          Games
+        </dt>
+        <dd className="mt-1 font-mono text-sm tabular-nums text-foreground">
+          {stats.games}
+        </dd>
+      </div>
+      <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
+        <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+          Best night
+        </dt>
+        <dd className="mt-1 font-mono text-sm tabular-nums text-positive">
+          +{formatUsd(stats.bestJump)}
+        </dd>
+      </div>
+      <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
+        <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+          Worst night
+        </dt>
+        <dd className="mt-1 font-mono text-sm tabular-nums text-negative">
+          {formatUsd(stats.worstJump)}
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+function PerformanceWeekView({ data }: { data: EnrichedPoint[] }) {
+  const chartColors = useChartColors();
+  const chartAccentRgb = useChartAccentRgb();
+  const stats = computeStats(data);
+  const sparkHeight = 168;
+
+  const priceMin = Math.min(...data.map((d) => d.price));
+  const priceMax = Math.max(...data.map((d) => d.price));
+  const pricePad = Math.max(1.5, (priceMax - priceMin) * 0.18 || 3);
+
+  return (
+    <div className="space-y-4">
+      <StatsStrip stats={stats} compact />
+
+      <ul className="space-y-2">
+        {[...data].reverse().map((game) => {
+          const deltaTone =
+            game.priceDelta == null
+              ? "text-muted-foreground"
+              : game.priceDelta > 0
+                ? "text-positive"
+                : game.priceDelta < 0
+                  ? "text-negative"
+                  : "text-muted-foreground";
+
+          return (
+            <li
+              key={game.date}
+              className="flex items-center justify-between gap-3 rounded-xl border border-border/80 bg-surface/90 px-3.5 py-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{game.shortDate}</p>
+                <p className="mt-0.5 font-mono text-xs tabular-nums text-muted">
+                  GmSc {game.gs?.toFixed(1) ?? "—"}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-mono text-sm tabular-nums text-foreground">
+                  {formatUsd(game.price)}
+                </p>
+                {game.priceDelta != null ? (
+                  <p className={`mt-0.5 font-mono text-xs tabular-nums ${deltaTone}`}>
+                    {game.priceDelta >= 0 ? "+" : ""}
+                    {formatUsd(game.priceDelta)}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-muted">Season opener</p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {data.length >= 2 ? (
+        <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
+            Week trend
+          </p>
+          <div
+            className="hs-chart-shell rounded-xl border border-border/70 bg-surface/60 px-1 py-2"
+            style={{ height: sparkHeight, minHeight: sparkHeight }}
+          >
+            <ResponsiveContainer width="100%" height={sparkHeight - 8} debounce={50}>
+              <ComposedChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={WEEK_SPARK_GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="0%"
+                      stopColor={`rgb(${chartAccentRgb})`}
+                      stopOpacity={0.2}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={`rgb(${chartAccentRgb})`}
+                      stopOpacity={0}
+                    />
+                  </linearGradient>
+                </defs>
+                <XAxis
+                  dataKey="shortDate"
+                  tick={{ ...chartTypography.tick, fontSize: 9 }}
+                  tickLine={false}
+                  axisLine={{ stroke: chartColors.axis, strokeWidth: 1 }}
+                  interval={0}
+                  height={32}
+                />
+                <YAxis
+                  domain={[priceMin - pricePad, priceMax + pricePad]}
+                  hide
+                />
+                <Tooltip content={(props) => <PerformanceTooltip {...props} />} />
+                <Area
+                  type="monotone"
+                  dataKey="price"
+                  stroke="none"
+                  fill={`url(#${WEEK_SPARK_GRADIENT_ID})`}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="price"
+                  stroke={chartColors.accent}
+                  strokeWidth={2}
+                  dot={{
+                    r: 4,
+                    fill: chartColors.accent,
+                    stroke: chartColors.surface,
+                    strokeWidth: 2,
+                  }}
+                  activeDot={{ r: 5, strokeWidth: 2 }}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PerformanceFullChart({ data }: { data: EnrichedPoint[] }) {
   const chartColors = useChartColors();
   const chartAccentRgb = useChartAccentRgb();
   const height = 340;
   const margin = { top: 12, right: 8, left: 4, bottom: 4 };
-
-  const data = useMemo(() => enrichPoints(points), [points]);
-
-  const stats = useMemo(() => {
-    if (data.length < 2) return null;
-    const first = data[0]!.price;
-    const last = data[data.length - 1]!.price;
-    let bestJump = -Infinity;
-    let worstJump = Infinity;
-    for (let i = 1; i < data.length; i++) {
-      const d = data[i]!.priceDelta ?? 0;
-      if (d > bestJump) bestJump = d;
-      if (d < worstJump) worstJump = d;
-    }
-    return {
-      change: last - first,
-      games: data.length,
-      bestJump: Number.isFinite(bestJump) ? bestJump : 0,
-      worstJump: Number.isFinite(worstJump) ? worstJump : 0,
-    };
-  }, [data]);
-
-  if (data.length === 0) {
-    return <p className="text-sm text-muted">No game nights in this window.</p>;
-  }
+  const stats = computeStats(data);
 
   const priceMin = Math.min(...data.map((d) => d.price));
   const priceMax = Math.max(...data.map((d) => d.price));
@@ -135,51 +343,7 @@ export function PerformanceGameChart({ points }: { points: MarketChartPoint[] })
 
   return (
     <div className="space-y-4">
-      {stats ? (
-        <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-              Period move
-            </dt>
-            <dd
-              className={`mt-1 font-mono text-sm tabular-nums ${
-                stats.change > 0
-                  ? "text-positive"
-                  : stats.change < 0
-                    ? "text-negative"
-                    : "text-foreground"
-              }`}
-            >
-              {stats.change >= 0 ? "+" : ""}
-              {formatUsd(stats.change)}
-            </dd>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-              Games
-            </dt>
-            <dd className="mt-1 font-mono text-sm tabular-nums text-foreground">
-              {stats.games}
-            </dd>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-              Best night
-            </dt>
-            <dd className="mt-1 font-mono text-sm tabular-nums text-positive">
-              +{formatUsd(stats.bestJump)}
-            </dd>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-surface/80 px-3 py-2.5">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-              Worst night
-            </dt>
-            <dd className="mt-1 font-mono text-sm tabular-nums text-negative">
-              {formatUsd(stats.worstJump)}
-            </dd>
-          </div>
-        </dl>
-      ) : null}
+      <StatsStrip stats={stats} />
 
       <div
         className="hs-chart-shell w-full min-w-0"
@@ -319,4 +483,28 @@ export function PerformanceGameChart({ points }: { points: MarketChartPoint[] })
       </div>
     </div>
   );
+}
+
+export function PerformanceGameChart({
+  points,
+  range = "1m",
+}: {
+  points: MarketChartPoint[];
+  range?: ChartRange;
+}) {
+  const data = useMemo(() => enrichPoints(points), [points]);
+
+  if (data.length === 0) {
+    return (
+      <p className="text-sm text-muted">
+        No game nights in this window. Try 1 month for more games.
+      </p>
+    );
+  }
+
+  if (range === "1w") {
+    return <PerformanceWeekView data={data} />;
+  }
+
+  return <PerformanceFullChart data={data} />;
 }
