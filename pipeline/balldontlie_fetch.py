@@ -291,9 +291,118 @@ def _stat_row_to_nba_shape(
     }
 
 
+RAW_GAME_LOGS_CSV = DATA_DIR / "raw_game_logs.csv"
+_DEDUPE_COLS = ["PLAYER_ID", "GAME_ID", "SEASON_TYPE"]
+
+
+def load_existing_raw_logs(path: Path | None = None) -> pd.DataFrame:
+    """Load cached raw logs if present (empty DataFrame otherwise)."""
+    csv_path = path or RAW_GAME_LOGS_CSV
+    if not csv_path.is_file():
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(csv_path, low_memory=False)
+    except (OSError, pd.errors.EmptyDataError, ValueError):
+        return pd.DataFrame()
+
+
+def merge_raw_logs(*frames: pd.DataFrame) -> pd.DataFrame:
+    """Concatenate raw log frames and drop duplicate player-game rows."""
+    parts = [f for f in frames if f is not None and not f.empty]
+    if not parts:
+        return pd.DataFrame()
+    merged = pd.concat(parts, ignore_index=True)
+    return merged.drop_duplicates(subset=_DEDUPE_COLS, keep="last")
+
+
+def _max_game_date_label(df: pd.DataFrame, season: str) -> str | None:
+    if df.empty or "GAME_DATE" not in df.columns or "SEASON" not in df.columns:
+        return None
+    sub = df[df["SEASON"].astype(str) == season].copy()
+    if sub.empty:
+        return None
+    dates = pd.to_datetime(sub["GAME_DATE"], errors="coerce").dropna()
+    if dates.empty:
+        return None
+    return dates.max().strftime("%Y-%m-%d")
+
+
+def _season_has_rows(df: pd.DataFrame, season: str) -> bool:
+    if df.empty or "SEASON" not in df.columns:
+        return False
+    return bool((df["SEASON"].astype(str) == season).any())
+
+
+def _force_full_fetch() -> bool:
+    raw = (os.environ.get("PIPELINE_FULL_FETCH") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def refresh_raw_game_logs(
+    start_year: int | None = None,
+    end_year: int | None = None,
+    out_path: Path | None = None,
+    *,
+    force_full: bool = False,
+) -> pd.DataFrame:
+    """
+    Merge cached raw logs with new BALLDONTLIE rows.
+
+    Default (CI): keep prior season from cache, fetch only current-season games
+    on/after the latest cached date via ``start_date``. Set ``force_full`` or
+    ``PIPELINE_FULL_FETCH=1`` for a full re-download.
+    """
+    if start_year is None or end_year is None:
+        start_year, end_year = sw.automated_window_season_years()
+
+    out = out_path or RAW_GAME_LOGS_CSV
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    existing = load_existing_raw_logs(out)
+    full = force_full or _force_full_fetch()
+
+    if full or existing.empty:
+        print("BALLDONTLIE: full fetch (no cache or forced).")
+        merged = collect_player_game_logs(start_year=start_year, end_year=end_year)
+        merged.to_csv(out, index=False)
+        return merged
+
+    frames: list[pd.DataFrame] = [existing]
+    prior_season = sw.season_string(start_year)
+    current_season = sw.season_string(end_year)
+
+    if start_year != end_year and not _season_has_rows(existing, prior_season):
+        print(f"BALLDONTLIE: prior season {prior_season} missing from cache — full fetch.")
+        frames.append(collect_player_game_logs(start_year=start_year, end_year=start_year))
+
+    anchor = _max_game_date_label(existing, current_season)
+    if anchor:
+        print(f"BALLDONTLIE: incremental current season from {anchor} ({current_season}).")
+        frames.append(
+            collect_player_game_logs(
+                start_year=end_year,
+                end_year=end_year,
+                start_date=anchor,
+            ),
+        )
+    else:
+        print(f"BALLDONTLIE: no {current_season} in cache — full fetch current season.")
+        frames.append(collect_player_game_logs(start_year=end_year, end_year=end_year))
+
+    merged = merge_raw_logs(*frames)
+    merged.to_csv(out, index=False)
+    try:
+        shown = out.relative_to(ROOT)
+    except ValueError:
+        shown = out
+    print(f"BALLDONTLIE: merged cache -> {len(merged)} rows at {shown}")
+    return merged
+
+
 def collect_player_game_logs(
     start_year: int | None = None,
     end_year: int | None = None,
+    *,
+    start_date: str | None = None,
 ) -> pd.DataFrame:
     """
     Pull all player-game stats for each season start year in [start_year, end_year]
@@ -325,6 +434,8 @@ def collect_player_game_logs(
                 ("per_page", str(per_page)),
                 ("period", "0"),
             ]
+            if start_date:
+                pairs.append(("start_date", start_date))
             if cursor is not None:
                 pairs.append(("cursor", str(cursor)))
 

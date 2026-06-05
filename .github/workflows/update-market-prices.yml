@@ -36,8 +36,31 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r requirements.txt
 
+      # Restore last successful raw_game_logs.csv (incremental fetch appends new games only).
+      - name: Restore cached raw game logs
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw_game_logs.csv
+          key: bdl-raw-v1-bootstrap
+          restore-keys: |
+            bdl-raw-v1-
+
       - name: Fetch NBA data and rebuild Fair Value
         run: python pipeline/run_pipeline.py --fetch-balldontlie --active
+
+      - name: Save raw game logs cache
+        if: success()
+        run: |
+          mkdir -p data
+          KEY=$(python -c "from pathlib import Path; import pandas as pd; p=Path('data/raw_game_logs.csv'); print('bootstrap' if not p.is_file() else str(pd.read_csv(p, usecols=['GAME_DATE'])['GAME_DATE'].max())[:10])")
+          echo "BDL_RAW_CACHE_KEY=bdl-raw-v1-${KEY}" >> "$GITHUB_ENV"
+
+      - name: Upload raw game logs cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw_game_logs.csv
+          key: ${{ env.BDL_RAW_CACHE_KEY }}
 
       - name: Sync Fair Value to Supabase
         run: python pipeline/sync_prices_to_supabase.py

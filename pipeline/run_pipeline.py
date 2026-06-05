@@ -58,6 +58,11 @@ def main() -> None:
         action="store_true",
         help="Fetch the full historical window instead of the lighter prior+current-season window.",
     )
+    parser.add_argument(
+        "--full-fetch",
+        action="store_true",
+        help="Re-download all BALLDONTLIE stats (ignore cached raw_game_logs.csv).",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
 
@@ -88,9 +93,13 @@ def main() -> None:
             import balldontlie_fetch as bdl
 
             print("Fetching raw game logs (BALLDONTLIE)…")
-            games_df = bdl.collect_player_game_logs(start_year=start_year, end_year=end_year)
             out_games = sw.DATA_DIR / "raw_game_logs.csv"
-            games_df.to_csv(out_games, index=False)
+            games_df = bdl.refresh_raw_game_logs(
+                start_year=start_year,
+                end_year=end_year,
+                out_path=out_games,
+                force_full=args.full_fetch or args.bootstrap_history,
+            )
             print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
         else:
             import data_collection as dc
