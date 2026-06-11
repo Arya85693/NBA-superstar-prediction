@@ -53,6 +53,24 @@ def test_sync_missing_skips_when_roster_already_on_file(tmp_path: Path):
     assert profiles.is_file()
 
 
+def test_ensure_profiles_csv_only_skips_fetch(tmp_path: Path, monkeypatch):
+    profiles = tmp_path / "profiles.csv"
+    _write_profiles(profiles, [(1, "Alice", "G", "2000-01-01")])
+
+    def boom(*args, **kwargs):
+        raise AssertionError("nba_api fetch should not run in CSV-only mode")
+
+    monkeypatch.setattr(bpp, "sync_missing_profiles", boom)
+
+    out = bpp.ensure_profiles_for_active(
+        active_csv=tmp_path / "missing_active.csv",
+        out_csv=profiles,
+        fetch=False,
+    )
+
+    assert out == profiles
+
+
 def test_sync_missing_detects_new_active_player(tmp_path: Path, monkeypatch):
     active = tmp_path / "active.csv"
     profiles = tmp_path / "profiles.csv"

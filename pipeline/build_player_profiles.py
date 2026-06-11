@@ -2,9 +2,9 @@
 Maintain data/player_profiles.csv (birth dates + positions) for the active roster.
 
 Birth dates and positions are stable; age at trade/market time is computed from
-birth_date in player_aging.py (see update_market_state.py). CI should NOT
-refetch every player each run — commit player_profiles.csv and only sync new
-roster ids when active_players.csv changes.
+birth_date in player_aging.py (see update_market_state.py). The automated
+pipeline never calls nba_api for profiles — commit player_profiles.csv and run
+this script manually when the roster adds players.
 
 Manual full rebuild (rare):
 
@@ -203,8 +203,27 @@ def ensure_profiles_for_active(
     active_csv: Path = ACTIVE_CSV,
     out_csv: Path = PROFILES_CSV,
     pause_seconds: float = 0.6,
+    fetch: bool = False,
 ) -> Path | None:
-    """Pipeline hook: incremental sync only (fast when CSV is committed)."""
+    """Pipeline hook: use committed CSV by default (no nba_api calls in CI).
+
+    Age is computed at market time from static ``birth_date`` values in
+    ``player_profiles.csv``. Run ``python pipeline/build_player_profiles.py``
+    manually when the roster adds players that need birth dates.
+    """
+    if not fetch:
+        if out_csv.is_file():
+            try:
+                shown = out_csv.relative_to(ROOT)
+            except ValueError:
+                shown = out_csv
+            print(f"player_profiles: using committed {shown} (no fetch).")
+            return out_csv
+        print(
+            "Warning: no player_profiles.csv — age lever stays neutral. "
+            "Run pipeline/build_player_profiles.py after roster changes.",
+        )
+        return None
     try:
         sync_missing_profiles(
             active_csv=active_csv,

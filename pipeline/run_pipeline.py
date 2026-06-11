@@ -63,6 +63,14 @@ def main() -> None:
         action="store_true",
         help="Re-download all BALLDONTLIE stats (ignore cached raw_game_logs.csv).",
     )
+    parser.add_argument(
+        "--fetch-profiles",
+        action="store_true",
+        help=(
+            "Fetch missing birth dates from nba_api (slow; manual roster sync only). "
+            "Default: use committed data/player_profiles.csv."
+        ),
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
 
@@ -156,9 +164,8 @@ def main() -> None:
         try:
             import build_player_profiles
 
-            # Birth dates are static — age is computed at market time from birth_date.
-            # Only fetch profiles for new roster ids (committed CSV keeps CI fast).
-            build_player_profiles.ensure_profiles_for_active()
+            # Birth dates are static — age is computed from committed birth_date only.
+            build_player_profiles.ensure_profiles_for_active(fetch=args.fetch_profiles)
         except Exception as exc:
             print(f"Warning: player_profiles sync skipped ({exc}).")
 
