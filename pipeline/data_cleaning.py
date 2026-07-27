@@ -99,11 +99,19 @@ def clean_game_logs() -> pd.DataFrame:
     )
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df.dropna(subset=["game_date", "player_id", "game_id"])
+    # Supabase player_game_prices PK is (player_id, game_id, game_date). Raw merges
+    # dedupe on SEASON_TYPE too, so the same game can survive twice and break sync.
+    before = len(df)
+    df = df.drop_duplicates(subset=["player_id", "game_id"], keep="last")
+    dropped = before - len(df)
     df = df.sort_values(by=["player_id", "game_date", "game_id"])
 
     out = DATA_DIR / "cleaned_game_logs.csv"
     df.to_csv(out, index=False)
-    print("cleaned_game_logs:", df.shape, "->", out.relative_to(ROOT))
+    msg = f"cleaned_game_logs: {df.shape} -> {out.relative_to(ROOT)}"
+    if dropped:
+        msg += f" (dropped {dropped} duplicate player-game rows)"
+    print(msg)
     return df
 
 

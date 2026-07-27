@@ -292,7 +292,9 @@ def _stat_row_to_nba_shape(
 
 
 RAW_GAME_LOGS_CSV = DATA_DIR / "raw_game_logs.csv"
-_DEDUPE_COLS = ["PLAYER_ID", "GAME_ID", "SEASON_TYPE"]
+# One row per player-game (season_type must not keep duplicates — Supabase PK is
+# player_id + game_id + game_date without season_type).
+_DEDUPE_COLS = ["PLAYER_ID", "GAME_ID"]
 
 
 def load_existing_raw_logs(path: Path | None = None) -> pd.DataFrame:

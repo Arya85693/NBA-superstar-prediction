@@ -275,6 +275,8 @@ def compute_prices(
     df = df.copy()
     df["game_date"] = pd.to_datetime(df["game_date"], errors="coerce")
     df = df.dropna(subset=["game_date", "player_id", "game_score"])
+    if "game_id" in df.columns:
+        df = df.drop_duplicates(subset=["player_id", "game_id"], keep="last")
     df = df.sort_values(["player_id", "game_date", "game_id"], kind="mergesort")
 
     if "minutes" not in df.columns:
@@ -363,5 +365,5 @@ if __name__ == "__main__":
     print(f"Wrote {out_df.shape} -> {OUTPUT_CSV.relative_to(ROOT)}")
     from validate_prices import run_validation
 
-    if not run_validation(out_df["price_after_game"], csv_path=OUTPUT_CSV):
+    if not run_validation(out_df["price_after_game"], csv_path=OUTPUT_CSV, df=out_df):
         sys.exit(1)

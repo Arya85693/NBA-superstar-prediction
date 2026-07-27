@@ -21,6 +21,16 @@ def test_merge_raw_logs_dedupes_player_game():
     assert len(merged) == 2
 
 
+def test_merge_raw_logs_collapses_season_type_variants():
+    """Same player+game must not survive twice — Supabase PK omits season_type."""
+    a = pd.DataFrame([_row(1, "g1", "2024-25", "2024-10-01")])
+    b = pd.DataFrame([_row(1, "g1", "2024-25", "2024-10-01")])
+    b.loc[0, "SEASON_TYPE"] = "Playoffs"
+    merged = bdl.merge_raw_logs(a, b)
+    assert len(merged) == 1
+    assert merged.iloc[0]["SEASON_TYPE"] == "Playoffs"
+
+
 def test_max_game_date_label_for_season():
     df = pd.DataFrame(
         [

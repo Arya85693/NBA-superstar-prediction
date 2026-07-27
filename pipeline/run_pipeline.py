@@ -143,7 +143,7 @@ def main() -> None:
 
     from validate_prices import run_validation
 
-    if not run_validation(out_df["price_after_game"], csv_path=pe.OUTPUT_CSV):
+    if not run_validation(out_df["price_after_game"], csv_path=pe.OUTPUT_CSV, df=out_df):
         sys.exit(1)
 
     if args.fetch_balldontlie and not args.active:

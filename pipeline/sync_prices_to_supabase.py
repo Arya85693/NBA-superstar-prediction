@@ -56,6 +56,29 @@ def _load_supabase_env_fallbacks() -> None:
             os.environ["SUPABASE_URL"] = public_url
 
 
+def _normalize_game_id(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s or s.lower() == "nan":
+        return ""
+    try:
+        return str(int(float(s)))
+    except ValueError:
+        return s[:64]
+
+
+def _normalize_game_date(raw: str) -> str:
+    """Match Postgres `date` — collapse datetime strings to YYYY-MM-DD."""
+    s = (raw or "").strip()
+    if not s or s.lower() == "nan":
+        return ""
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    ts = pd.to_datetime(s, errors="coerce")
+    if pd.isna(ts):
+        return s[:32]
+    return ts.strftime("%Y-%m-%d")
+
+
 def _row_from_prices_csv(row: dict[str, str]) -> dict:
     def fnum(key: str, default: str = "0") -> float:
         v = (row.get(key) or default).strip()
@@ -79,14 +102,28 @@ def _row_from_prices_csv(row: dict[str, str]) -> dict:
         "player_id": int(float(row["player_id"])),
         "player_name": (row.get("player_name") or "")[:512],
         "team_abbr": (row.get("team_abbr") or "")[:16],
-        "game_id": str(row.get("game_id") or "")[:64],
-        "game_date": str(row.get("game_date") or "")[:32],
+        "game_id": _normalize_game_id(row.get("game_id") or ""),
+        "game_date": _normalize_game_date(row.get("game_date") or ""),
         "season": (row.get("season") or "")[:32],
         "minutes": fnum("minutes"),
         "game_score": fnum("game_score"),
         "price_after_game": fnum("price_after_game"),
         "prior_season_avg_game_score": opt_float("prior_season_avg_game_score"),
     }
+
+
+def _insert_price_batches(client, rows: list[dict]) -> int:
+    """Insert price rows in batches. Caller must pass PK-unique rows."""
+    total = 0
+    for i in range(0, len(rows), BATCH):
+        batch = rows[i : i + BATCH]
+        client.table("player_game_prices").upsert(
+            batch,
+            on_conflict="player_id,game_id,game_date",
+        ).execute()
+        total += len(batch)
+        print(f"  upserted {total} price rows…")
+    return total
 
 
 def main() -> None:
@@ -112,24 +149,35 @@ def main() -> None:
     print("Truncating remote price tables…")
     client.rpc("truncate_prices_for_reload", {}).execute()
 
-    batch: list[dict] = []
-    total = 0
+    price_rows: list[dict] = []
+    seen_keys: set[tuple[int, str, str]] = set()
+    skipped_dupes = 0
+    skipped_invalid = 0
     with PRICES_CSV.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            batch.append(_row_from_prices_csv(row))
-            if len(batch) >= BATCH:
-                client.table("player_game_prices").insert(batch).execute()
-                total += len(batch)
-                print(f"  inserted {total} price rows…")
-                batch.clear()
-    if batch:
-        client.table("player_game_prices").insert(batch).execute()
-        total += len(batch)
-        print(f"  inserted {total} price rows (final).")
+            parsed = _row_from_prices_csv(row)
+            if not parsed["game_id"] or not parsed["game_date"]:
+                skipped_invalid += 1
+                continue
+            key = (parsed["player_id"], parsed["game_id"], parsed["game_date"])
+            if key in seen_keys:
+                skipped_dupes += 1
+                continue
+            seen_keys.add(key)
+            price_rows.append(parsed)
+
+    if skipped_dupes or skipped_invalid:
+        print(
+            f"  skipped {skipped_dupes} duplicate PK rows, "
+            f"{skipped_invalid} invalid game_id/date rows"
+        )
+    total = _insert_price_batches(client, price_rows)
+    print(f"  upserted {total} price rows (final).")
 
     active_batch: list[dict] = []
     active_ids_ordered: list[int] = []
+    seen_active: set[int] = set()
     with ACTIVE_CSV.open(newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
         header = next(reader, None)
@@ -140,13 +188,22 @@ def main() -> None:
                 pid = int(float(row[0]))
             except (ValueError, IndexError):
                 continue
+            if pid in seen_active:
+                continue
+            seen_active.add(pid)
             active_ids_ordered.append(pid)
             active_batch.append({"player_id": pid})
             if len(active_batch) >= BATCH:
-                client.table("active_players").insert(active_batch).execute()
+                client.table("active_players").upsert(
+                    active_batch,
+                    on_conflict="player_id",
+                ).execute()
                 active_batch.clear()
     if active_batch:
-        client.table("active_players").insert(active_batch).execute()
+        client.table("active_players").upsert(
+            active_batch,
+            on_conflict="player_id",
+        ).execute()
 
     active_set = set(active_ids_ordered)
 
@@ -227,10 +284,16 @@ def main() -> None:
             },
         )
         if len(board_batch) >= BATCH:
-            client.table("player_board").insert(board_batch).execute()
+            client.table("player_board").upsert(
+                board_batch,
+                on_conflict="player_id",
+            ).execute()
             board_batch.clear()
     if board_batch:
-        client.table("player_board").insert(board_batch).execute()
+        client.table("player_board").upsert(
+            board_batch,
+            on_conflict="player_id",
+        ).execute()
     print(f"  player_board: {len(tick_map)} tickers.")
 
     print("Bumping prices_snapshot_meta.revision …")

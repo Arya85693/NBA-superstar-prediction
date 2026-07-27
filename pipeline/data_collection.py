@@ -89,7 +89,7 @@ def collect_player_game_logs(
         return pd.DataFrame()
     merged = pd.concat(frames, ignore_index=True)
     return merged.drop_duplicates(
-        subset=["PLAYER_ID", "GAME_ID", "SEASON_TYPE"],
+        subset=["PLAYER_ID", "GAME_ID"],
         keep="last",
     )
 
