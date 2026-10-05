@@ -156,11 +156,11 @@ def main() -> None:
             if not parsed["game_id"] or not parsed["game_date"]:
                 skipped_invalid += 1
                 continue
-            key = (parsed["player_id"], parsed["game_id"], parsed["game_date"])
-            if key in seen_keys:
+            pk = (parsed["player_id"], parsed["game_id"], parsed["game_date"])
+            if pk in seen_keys:
                 skipped_dupes += 1
                 continue
-            seen_keys.add(key)
+            seen_keys.add(pk)
             price_rows.append(parsed)
             price_ids.add(parsed["player_id"])
 
