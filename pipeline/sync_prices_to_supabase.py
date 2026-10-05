@@ -17,8 +17,10 @@ from __future__ import annotations
 import csv
 import os
 import sys
+import time
 from pathlib import Path
 
+import httpx
 import pandas as pd
 from supabase import create_client
 
@@ -31,6 +33,29 @@ PRICES_CSV = REPO_ROOT / "data" / "player_game_prices.csv"
 ACTIVE_CSV = REPO_ROOT / "data" / "active_players.csv"
 
 BATCH = 1000
+RETRY_ATTEMPTS = 5
+
+
+def _execute(request, what: str):
+    """
+    Run a Supabase request, retrying dropped connections with backoff.
+
+    Every call in this script is safe to repeat (truncate, upserts, meta
+    update, revision bump), and a failure after truncate leaves the site empty.
+    """
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            return request.execute()
+        except httpx.TransportError as exc:
+            if attempt == RETRY_ATTEMPTS:
+                raise
+            wait = 2**attempt
+            print(
+                f"  {what}: {type(exc).__name__} ({exc}); "
+                f"retry {attempt}/{RETRY_ATTEMPTS - 1} in {wait}s…",
+            )
+            time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def _load_env_file(path: Path) -> None:
@@ -117,10 +142,13 @@ def _insert_price_batches(client, rows: list[dict]) -> int:
     total = 0
     for i in range(0, len(rows), BATCH):
         batch = rows[i : i + BATCH]
-        client.table("player_game_prices").upsert(
-            batch,
-            on_conflict="player_id,game_id,game_date",
-        ).execute()
+        _execute(
+            client.table("player_game_prices").upsert(
+                batch,
+                on_conflict="player_id,game_id,game_date",
+            ),
+            f"price rows {i}-{i + len(batch)}",
+        )
         total += len(batch)
         print(f"  upserted {total} price rows…")
     return total
@@ -196,7 +224,7 @@ def main() -> None:
     client = create_client(url, key)
 
     print("Truncating remote price tables…")
-    client.rpc("truncate_prices_for_reload", {}).execute()
+    _execute(client.rpc("truncate_prices_for_reload", {}), "truncate")
 
     if skipped_dupes or skipped_invalid:
         print(
@@ -210,16 +238,16 @@ def main() -> None:
     for pid in active_ids_ordered:
         active_batch.append({"player_id": pid})
         if len(active_batch) >= BATCH:
-            client.table("active_players").upsert(
-                active_batch,
-                on_conflict="player_id",
-            ).execute()
+            _execute(
+                client.table("active_players").upsert(active_batch, on_conflict="player_id"),
+                "active_players",
+            )
             active_batch.clear()
     if active_batch:
-        client.table("active_players").upsert(
-            active_batch,
-            on_conflict="player_id",
-        ).execute()
+        _execute(
+            client.table("active_players").upsert(active_batch, on_conflict="player_id"),
+            "active_players",
+        )
 
     print("Computing max_dataset_season + played_player_ids + player_board …")
 
@@ -262,12 +290,15 @@ def main() -> None:
         played_ids = sorted(int(x) for x in sub["player_id"].unique().tolist())
 
     if max_season is not None:
-        client.table("prices_snapshot_meta").update(
-            {
-                "max_dataset_season": max_season,
-                "played_player_ids": played_ids,
-            },
-        ).eq("id", 1).execute()
+        _execute(
+            client.table("prices_snapshot_meta").update(
+                {
+                    "max_dataset_season": max_season,
+                    "played_player_ids": played_ids,
+                },
+            ).eq("id", 1),
+            "prices_snapshot_meta",
+        )
     else:
         print("  (warning: could not infer max_dataset_season — run supabase/prices_meta_snapshot.sql and re-sync.)")
 
@@ -298,20 +329,20 @@ def main() -> None:
             },
         )
         if len(board_batch) >= BATCH:
-            client.table("player_board").upsert(
-                board_batch,
-                on_conflict="player_id",
-            ).execute()
+            _execute(
+                client.table("player_board").upsert(board_batch, on_conflict="player_id"),
+                "player_board",
+            )
             board_batch.clear()
     if board_batch:
-        client.table("player_board").upsert(
-            board_batch,
-            on_conflict="player_id",
-        ).execute()
+        _execute(
+            client.table("player_board").upsert(board_batch, on_conflict="player_id"),
+            "player_board",
+        )
     print(f"  player_board: {len(tick_map)} tickers.")
 
     print("Bumping prices_snapshot_meta.revision …")
-    client.rpc("bump_prices_revision", {}).execute()
+    _execute(client.rpc("bump_prices_revision", {}), "bump_prices_revision")
     print("Done. Set PRICES_SOURCE=supabase on Vercel and redeploy.")
 
 
