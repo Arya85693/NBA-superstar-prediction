@@ -206,11 +206,14 @@ export function buildChartPointsFromGames(
   return downsample(out, MAX_CHART_POINTS);
 }
 
-/** One point per played game — step spikes on game nights (performance view). */
+/**
+ * One point per played game — step spikes on game nights (performance view).
+ * The window ends at the player's last played game, not today, so the offseason
+ * (or a long injury) still shows that player's most recent games.
+ */
 export function buildGameNightChartPoints(
   history: PriceRow[],
   range: ChartRange,
-  endAt?: string | null,
 ): MarketChartPoint[] {
   if (history.length === 0) return [];
 
@@ -225,7 +228,7 @@ export function buildGameNightChartPoints(
   const sorted = [...played].sort(
     (a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime(),
   );
-  const endIso = chartEndIso(endAt, sorted[sorted.length - 1]!.game_date);
+  const endIso = sorted[sorted.length - 1]!.game_date.slice(0, 10);
   const endMs = parseInstant(`${endIso}T23:59:59Z`);
   const startMs = endMs - CHART_RANGE_DAYS[range] * 86_400_000;
 

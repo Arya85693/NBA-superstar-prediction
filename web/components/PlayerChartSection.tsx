@@ -81,12 +81,9 @@ export function PlayerChartSection({
   const [range, setRange] = useState<ChartRange>("1m");
   const [view, setView] = useState<ChartView>("performance");
 
-  const endAnchor =
-    marketMeta?.market_updated_at ?? marketEndDate ?? lastGameDate ?? null;
-
   const performancePoints = useMemo(
-    () => buildGameNightChartPoints(history, range, endAnchor),
-    [endAnchor, history, range],
+    () => buildGameNightChartPoints(history, range),
+    [history, range],
   );
 
   const { points: marketPoints, source } = useMemo(
