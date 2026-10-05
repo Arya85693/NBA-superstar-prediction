@@ -144,12 +144,8 @@ def main() -> None:
         print(f"Missing {ACTIVE_CSV}", file=sys.stderr)
         sys.exit(1)
 
-    client = create_client(url, key)
-
-    print("Truncating remote price tables…")
-    client.rpc("truncate_prices_for_reload", {}).execute()
-
     price_rows: list[dict] = []
+    price_ids: set[int] = set()
     seen_keys: set[tuple[int, str, str]] = set()
     skipped_dupes = 0
     skipped_invalid = 0
@@ -166,21 +162,13 @@ def main() -> None:
                 continue
             seen_keys.add(key)
             price_rows.append(parsed)
+            price_ids.add(parsed["player_id"])
 
-    if skipped_dupes or skipped_invalid:
-        print(
-            f"  skipped {skipped_dupes} duplicate PK rows, "
-            f"{skipped_invalid} invalid game_id/date rows"
-        )
-    total = _insert_price_batches(client, price_rows)
-    print(f"  upserted {total} price rows (final).")
-
-    active_batch: list[dict] = []
     active_ids_ordered: list[int] = []
     seen_active: set[int] = set()
     with ACTIVE_CSV.open(newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
-        header = next(reader, None)
+        next(reader, None)
         for row in reader:
             if not row:
                 continue
@@ -192,20 +180,46 @@ def main() -> None:
                 continue
             seen_active.add(pid)
             active_ids_ordered.append(pid)
-            active_batch.append({"player_id": pid})
-            if len(active_batch) >= BATCH:
-                client.table("active_players").upsert(
-                    active_batch,
-                    on_conflict="player_id",
-                ).execute()
-                active_batch.clear()
+
+    active_set = set(active_ids_ordered)
+    overlap = price_ids & active_set
+    if price_ids and active_set and not overlap:
+        print(
+            "Refusing to sync: active roster and price file share no player ids "
+            f"({len(active_set)} active, {len(price_ids)} priced). "
+            "The remote market was left unchanged.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(f"Active roster matches {len(overlap)} players in the price file.")
+
+    client = create_client(url, key)
+
+    print("Truncating remote price tables…")
+    client.rpc("truncate_prices_for_reload", {}).execute()
+
+    if skipped_dupes or skipped_invalid:
+        print(
+            f"  skipped {skipped_dupes} duplicate PK rows, "
+            f"{skipped_invalid} invalid game_id/date rows"
+        )
+    total = _insert_price_batches(client, price_rows)
+    print(f"  upserted {total} price rows (final).")
+
+    active_batch: list[dict] = []
+    for pid in active_ids_ordered:
+        active_batch.append({"player_id": pid})
+        if len(active_batch) >= BATCH:
+            client.table("active_players").upsert(
+                active_batch,
+                on_conflict="player_id",
+            ).execute()
+            active_batch.clear()
     if active_batch:
         client.table("active_players").upsert(
             active_batch,
             on_conflict="player_id",
         ).execute()
-
-    active_set = set(active_ids_ordered)
 
     print("Computing max_dataset_season + played_player_ids + player_board …")
 

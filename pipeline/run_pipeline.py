@@ -27,7 +27,7 @@ def main() -> None:
         action="store_true",
         help=(
             "Primary: re-download raw_game_logs.csv from BALLDONTLIE (All-Star+). "
-            "Set BALLDONTLIE_API_KEY. Use with --active so player ids match game logs."
+            "Set BALLDONTLIE_API_KEY. Use with --active so the roster uses the same player ids as the price file."
         ),
     )
     fetch_group.add_argument(
@@ -148,8 +148,8 @@ def main() -> None:
 
     if args.fetch_balldontlie and not args.active:
         print(
-            "Note: active_players.csv was not refreshed. For BALLDONTLIE ids, use "
-            "`--fetch-balldontlie --active` so the tradable list matches BDL player_id.",
+            "Note: active_players.csv was not refreshed. Use "
+            "`--fetch-balldontlie --active` so the roster ids match the price file.",
         )
 
     if args.active:

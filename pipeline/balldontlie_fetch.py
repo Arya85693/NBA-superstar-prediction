@@ -10,9 +10,11 @@ Requirements
 
 Important
 ---------
-- `PLAYER_ID`, `TEAM_ID`, and `GAME_ID` are **BALLDONTLIE numeric ids**, not stats.nba.com
-  ids. Use `--fetch-balldontlie --active` so `active_players.csv` is built from
-  `GET /nba/v1/players/active` (same id space as game logs).
+- `PLAYER_ID`, `TEAM_ID`, and `GAME_ID` on a fresh BALLDONTLIE pull are BALLDONTLIE
+  ids, not stats.nba.com ids. Cached raw logs may still use the older NBA.com ids.
+  `--fetch-balldontlie --active` rewrites the roster (and any newly fetched rows)
+  onto the player ids already in the price file, matched by name, so the market
+  join is not empty.
 
 Environment
 -----------
@@ -317,6 +319,160 @@ def merge_raw_logs(*frames: pd.DataFrame) -> pd.DataFrame:
     return merged.drop_duplicates(subset=_DEDUPE_COLS, keep="last")
 
 
+def canon_player_ids(
+    df: pd.DataFrame,
+    id_col: str,
+    name_col: str,
+    date_col: str | None = None,
+) -> tuple[set[int], dict[str, int]]:
+    """
+    Ids present in ``df``, plus one preferred id per normalised name.
+
+    When several ids share a name, keep the one with the latest date, then the
+    most rows. That picks the current player when a suffix-stripped name also
+    matches an older player still in the history.
+    """
+    from espn_injuries import normalize_name
+
+    if df.empty or id_col not in df.columns or name_col not in df.columns:
+        return set(), {}
+
+    work = pd.DataFrame(
+        {
+            "pid": pd.to_numeric(df[id_col], errors="coerce"),
+            "name": df[name_col].map(lambda v: normalize_name("" if pd.isna(v) else str(v))),
+        },
+    )
+    if date_col and date_col in df.columns:
+        work["when"] = pd.to_datetime(df[date_col], errors="coerce")
+    else:
+        work["when"] = pd.NaT
+    work = work.dropna(subset=["pid"])
+    if work.empty:
+        return set(), {}
+    work["pid"] = work["pid"].astype("int64")
+    id_set = {int(pid) for pid in work["pid"].tolist()}
+    named = work[work["name"] != ""]
+    if named.empty:
+        return id_set, {}
+    agg = named.groupby(["name", "pid"], as_index=False).agg(
+        when=("when", "max"),
+        n=("pid", "size"),
+    )
+    agg = agg.sort_values(["when", "n", "pid"], na_position="first")
+    name_to_id: dict[str, int] = {}
+    for name, pid in zip(agg["name"].tolist(), agg["pid"].tolist(), strict=True):
+        name_to_id[str(name)] = int(pid)
+    return id_set, name_to_id
+
+
+def align_id_column(
+    df: pd.DataFrame,
+    id_col: str,
+    name_col: str,
+    canon_ids: set[int],
+    name_to_id: dict[str, int],
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """
+    Rewrite ``id_col`` onto ``canon_ids``.
+
+    The row's name selects the canon id first: NBA.com and BALLDONTLIE ids can
+    collide numerically for different players. Without a name match, an id
+    already in the canon is kept; anything else keeps its original id.
+    """
+    from espn_injuries import normalize_name
+
+    stats = {"already": 0, "remapped": 0, "unmatched": 0}
+    if df.empty or id_col not in df.columns:
+        return df.copy(), stats
+
+    out = df.copy()
+    raw_ids = pd.to_numeric(out[id_col], errors="coerce").tolist()
+    if name_col in out.columns:
+        raw_names = out[name_col].tolist()
+    else:
+        raw_names = [""] * len(out)
+
+    aligned: list[int] = []
+    for value, raw_name in zip(raw_ids, raw_names, strict=True):
+        pid = int(value) if pd.notna(value) else 0
+        key = normalize_name("" if pd.isna(raw_name) else str(raw_name))
+        mapped = name_to_id.get(key) if key else None
+        if mapped:
+            aligned.append(int(mapped))
+            stats["already" if int(mapped) == pid else "remapped"] += 1
+        elif pid and pid in canon_ids:
+            aligned.append(pid)
+            stats["already"] += 1
+        else:
+            aligned.append(pid)
+            stats["unmatched"] += 1
+    out[id_col] = aligned
+    return out, stats
+
+
+def align_incoming_logs(incoming: pd.DataFrame, existing: pd.DataFrame) -> pd.DataFrame:
+    """Map newly fetched BALLDONTLIE rows onto the player ids already in the cache."""
+    needed = {"PLAYER_ID", "PLAYER_NAME"}
+    if (
+        incoming.empty
+        or existing.empty
+        or not needed.issubset(incoming.columns)
+        or not needed.issubset(existing.columns)
+    ):
+        return incoming
+    date_col = "GAME_DATE" if "GAME_DATE" in existing.columns else None
+    canon_ids, name_to_id = canon_player_ids(existing, "PLAYER_ID", "PLAYER_NAME", date_col)
+    aligned, stats = align_id_column(
+        incoming, "PLAYER_ID", "PLAYER_NAME", canon_ids, name_to_id,
+    )
+    total = stats["already"] + stats["remapped"] + stats["unmatched"]
+    if stats["remapped"]:
+        print(
+            "BALLDONTLIE: rewrote incoming player ids onto cached ids "
+            f"(remapped {stats['remapped']} rows, already {stats['already']}, "
+            f"unmatched {stats['unmatched']}).",
+        )
+    elif total and stats["already"] == 0:
+        print(
+            "BALLDONTLIE: incoming player ids are not in the cache and "
+            "names did not match — new rows keep their own ids.",
+        )
+
+    # Cached and fresh rows number games differently (stats.nba.com "0022500001"
+    # vs BALLDONTLIE ints), so PLAYER_ID + GAME_ID dedupe misses the overlap on
+    # the anchor date. A player plays at most one game per day.
+    if "GAME_DATE" in aligned.columns and "GAME_DATE" in existing.columns:
+        def day_keys(frame: pd.DataFrame) -> pd.Series:
+            day = pd.to_datetime(frame["GAME_DATE"], errors="coerce").dt.strftime("%Y-%m-%d")
+            pid = pd.to_numeric(frame["PLAYER_ID"], errors="coerce").astype("Int64").astype(str)
+            return pid + "|" + day.fillna("")
+
+        seen = set(day_keys(existing).tolist())
+        dup = day_keys(aligned).isin(seen)
+        if dup.any():
+            print(f"BALLDONTLIE: dropped {int(dup.sum())} incoming rows already cached for that player and date.")
+            aligned = aligned[~dup]
+    return aligned
+
+
+def align_active_players_to_prices(
+    active: pd.DataFrame,
+    prices_csv: Path,
+) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Point the active roster at the player ids used in ``player_game_prices.csv``."""
+    prices = pd.read_csv(
+        prices_csv,
+        usecols=lambda c: c in {"player_id", "player_name", "game_date"},
+        dtype={"player_name": str},
+        low_memory=False,
+    )
+    canon_ids, name_to_id = canon_player_ids(
+        prices, "player_id", "player_name", "game_date",
+    )
+    return align_id_column(active, "player_id", "player_name", canon_ids, name_to_id)
+
+
 def _max_game_date_label(df: pd.DataFrame, season: str) -> str | None:
     if df.empty or "GAME_DATE" not in df.columns or "SEASON" not in df.columns:
         return None
@@ -368,18 +524,18 @@ def refresh_raw_game_logs(
         merged.to_csv(out, index=False)
         return merged
 
-    frames: list[pd.DataFrame] = [existing]
+    fetched: list[pd.DataFrame] = []
     prior_season = sw.season_string(start_year)
     current_season = sw.season_string(end_year)
 
     if start_year != end_year and not _season_has_rows(existing, prior_season):
         print(f"BALLDONTLIE: prior season {prior_season} missing from cache — full fetch.")
-        frames.append(collect_player_game_logs(start_year=start_year, end_year=start_year))
+        fetched.append(collect_player_game_logs(start_year=start_year, end_year=start_year))
 
     anchor = _max_game_date_label(existing, current_season)
     if anchor:
         print(f"BALLDONTLIE: incremental current season from {anchor} ({current_season}).")
-        frames.append(
+        fetched.append(
             collect_player_game_logs(
                 start_year=end_year,
                 end_year=end_year,
@@ -388,9 +544,12 @@ def refresh_raw_game_logs(
         )
     else:
         print(f"BALLDONTLIE: no {current_season} in cache — full fetch current season.")
-        frames.append(collect_player_game_logs(start_year=end_year, end_year=end_year))
+        fetched.append(collect_player_game_logs(start_year=end_year, end_year=end_year))
 
-    merged = merge_raw_logs(*frames)
+    # Cached logs may use NBA.com ids while a new pull uses BALLDONTLIE ids.
+    # Rewrite matches onto the cached id so one player stays one market row.
+    aligned = [align_incoming_logs(frame, existing) for frame in fetched]
+    merged = merge_raw_logs(existing, *aligned)
     merged.to_csv(out, index=False)
     try:
         shown = out.relative_to(ROOT)
@@ -474,8 +633,16 @@ def collect_player_game_logs(
     )
 
 
-def save_active_players_bdl(out_path: Path | None = None) -> Path:
-    """Paginate `GET /nba/v1/players/active` into data/active_players.csv (BDL player ids)."""
+def save_active_players_bdl(
+    out_path: Path | None = None,
+    prices_csv: Path | None = None,
+) -> Path:
+    """
+    Paginate `GET /nba/v1/players/active` into data/active_players.csv.
+
+    When a price file exists, roster ids are rewritten to the ids in that file
+    (matched by name) so the market join is not empty across id systems.
+    """
     path = out_path or (DATA_DIR / "active_players.csv")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -515,8 +682,31 @@ def save_active_players_bdl(out_path: Path | None = None) -> Path:
         cursor = new_c
 
     df = pd.DataFrame(rows).drop_duplicates(subset=["player_id"]).sort_values("player_id")
+    prices_path = prices_csv if prices_csv is not None else (DATA_DIR / "player_game_prices.csv")
+    if prices_path.is_file() and not df.empty:
+        before = len(df)
+        df, stats = align_active_players_to_prices(df, prices_path)
+        df = df.drop_duplicates(subset=["player_id"]).sort_values("player_id")
+        collapsed = before - len(df)
+        print(
+            "Active roster aligned to price ids: "
+            f"already {stats['already']}, remapped {stats['remapped']}, "
+            f"unmatched {stats['unmatched']}.",
+        )
+        if collapsed:
+            print(f"  collapsed {collapsed} roster rows onto a shared price id.")
+        matched = stats["already"] + stats["remapped"]
+        if matched == 0:
+            raise RuntimeError(
+                "Active roster shares no players with "
+                f"{prices_path.name}. Refusing to publish an empty market.",
+            )
     df.to_csv(path, index=False)
-    print(f"Saved {len(df)} active players -> {path.relative_to(ROOT)}")
+    try:
+        shown = path.relative_to(ROOT)
+    except ValueError:
+        shown = path
+    print(f"Saved {len(df)} active players -> {shown}")
     return path
 
 
