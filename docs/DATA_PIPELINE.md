@@ -1,6 +1,6 @@
 # Data Pipeline
 
-The pipeline transforms **raw NBA box scores** into **Fair Value time series**, publishes them to Supabase, then advances **Market Price** with explainable levers. This document traces every stage, file artifact, and design trade-off.
+The pipeline transforms **raw NBA box scores** into **Fair Value time series**, publishes them to Supabase, then advances **Market Price** with explainable levers and publishes both under one revision. This document traces every stage, file artifact, and design trade-off.
 
 ---
 
@@ -26,7 +26,7 @@ flowchart TD
     FV_CSV --> TRUNC["RPC truncate_prices_for_reload"]
     TRUNC --> PG_PGP["Supabase player_game_prices"]
     FV_CSV --> PG_BOARD["player_board + active_players"]
-    PG_PGP --> BUMP1["bump_prices_revision"]
+    PG_PGP -.->|"standalone sync only"| BUMP1["bump_prices_revision"]
   end
 
   subgraph Market["4. Market layer"]
@@ -39,7 +39,7 @@ flowchart TD
     UMS --> PG_HIST["player_market_history"]
     UMS --> PG_TICK["player_market_ticks insert"]
     UMS --> MKT_CSV["data/player_market_state.csv"]
-    PG_STATE --> BUMP2["bump_market_revision"]
+    PG_TICK --> BUMP2["publish_pricing_revision<br/>(revision + market_revision together)"]
   end
 
   subgraph Serve["5. Serve"]
@@ -69,7 +69,7 @@ flowchart TD
 
 **Design decision — prior + current season only:** Prior season supplies IPO anchors and benchmarks; current season drives live prices. Full history is opt-in (`--bootstrap-history`) to limit API volume.
 
-**Data included:** Regular season and playoffs. Minutes = 0 games may exist but do not count as “played” for board filters.
+**Data included:** Regular season and playoffs. Minutes = 0 rows may exist; they do not count as “played” for board filters, and Fair Value treats them as non-games (price carries forward).
 
 ---
 
@@ -91,29 +91,32 @@ flowchart TD
 
 Per-player, per-season logic:
 
-1. **Season-open IPO** — Blend of league percentile (minutes-adjusted prior-season mean GmSc) and direct dollar mapping; rookies get a floor anchor (`ROOKIE_IPO_PRICE`).
-2. **Per-game update** — Exponential smoothing toward a target mixing tonight’s game, prior-season reputation, and season-to-date average.
-3. **Early-season damping** — Lower `alpha` for first five games to reduce noise.
-4. **Between games** — Price flat until next game logged.
+All production measures use the effective game score `g* = game_score × clamp(minutes / 34, 0.22, 1.08)`.
 
-Key constants (see `price_engine.py`): `ALPHA=0.25`, `PRICE_MAX=185`, ceiling `PRICE_MAX+55` for absolute clamp shared with market layer.
+1. **Season-open IPO** — Blend of league percentile and direct dollar mapping of the prior-season mean `g*`, weighted by sample confidence `c = min(prior_games / 25, 1)` against the rookie default (`ROOKIE_IPO_PRICE` = $61.80). No cliff at 25 games.
+2. **Per-game update** — Exponential smoothing toward a target mixing tonight’s `g*`, prior-season mean `g*` (weight scaled by `c`), and season-to-date mean `g*`.
+3. **Early-season damping** — Half `alpha` for the first five played games.
+4. **DNP rows / between games** — Price flat until the next played game.
 
-**Validation:** `validate_prices.py` runs before pipeline exits non-zero on anomalies.
+Key constants (see `price_engine.py`): `ALPHA=0.30`, `PRICE_MIN=45`, `PRICE_MAX=185`, ceiling `PRICE_MAX+55` (240) shared with the market layer.
+
+**Validation:** `validate_prices.py` fails the run on any missing, non-positive or out-of-range price, or duplicate key.
 
 ---
 
 ### Stage 4 — Sync to Supabase
 
-**Entry:** `python pipeline/sync_prices_to_supabase.py`
+**Entry:** `python pipeline/sync_prices_to_supabase.py [--defer-revision-bump]` (CI passes the flag)
 
+0. Refuse to run (remote unchanged) if any Fair Value is missing/`≤ 0` or the roster and price file share no ids
 1. `truncate_prices_for_reload()` — wipes `player_board`, `player_game_prices`, `active_players`
 2. Batch insert all game rows (`BATCH=1000`)
 3. Insert active IDs
 4. Compute `max_dataset_season`, `played_player_ids` (players with minutes > 0 in max season)
 5. Build `player_board` with `ticker_assign.assign_player_tickers`
-6. `bump_prices_revision()`
+6. `bump_prices_revision()` — skipped with `--defer-revision-bump`; Stage 5 then publishes both revisions together
 
-**Design decision — full reload:** Correctness and simplicity over incremental diffing. Revision bump invalidates Next.js in-memory caches.
+**Design decision — full reload:** Correctness and simplicity over incremental diffing. The revision bump invalidates Next.js in-memory caches; deferring it keeps warm caches on the previous coherent Fair Value + Market Price pair until the market step finishes.
 
 ---
 
@@ -125,22 +128,24 @@ For each active player:
 
 | Input | Source |
 |-------|--------|
-| Fair Value | Latest `price_after_game` from CSV |
-| Season games | Current-season rows from CSV |
-| Prior anchor | `prior_season_avg_game_score` |
-| Previous market price | `player_market_state` (or local CSV fallback) |
-| Previous sentiment | EMA continuity from prior `sentiment_score` |
-| Team win % | Derived from W/L in CSV (`result` column) |
-| Injuries | `espn_injuries.fetch_injuries()` |
+| Fair Value | Latest `price_after_game` from CSV (players with missing/`≤ 0` values are skipped) |
+| Season games | Current-season rows from CSV (projection diagnostic) |
+| Prior anchor | `prior_season_avg_game_score` (projection diagnostic) |
+| Previous state | `player_market_state`: price, Fair Value, sentiment, `updated_at`, model version (or local CSV fallback) |
+| Previous sentiment | EMA continuity from prior `sentiment_score` (same model version only) |
+| Team win % | Derived from W/L in CSV (`result` column) — stored, weight 0 |
+| Injuries | `espn_injuries.fetch_injuries()` → availability factor on the anchor |
 | News | `news_sentiment.fetch_news_sentiment()` (VADER on RSS) |
 | Demand | Recent `trades` in 7-day window, per-user capped |
 
+A failed read of `player_market_state` or `trades` aborts before any write (a missing table is treated as a first run). Reversion and movement caps scale with the minutes since the previous `updated_at` (capped at one 30-minute cycle), so re-runs do not compound.
+
 **Outputs:**
 
-- Upsert `player_market_state` (500-row batches)
+- Upsert `player_market_state` (500-row batches, `updated_at` written explicitly)
 - Upsert `player_market_history` for today
-- Insert `player_market_ticks` with `recorded_at = now()`
-- `bump_market_revision()`
+- Insert `player_market_ticks` with `recorded_at = now()` (append-only)
+- `publish_pricing_revision(p_model_version)` — or `bump_prices_revision()` + `bump_market_revision()` if `supabase/pricing_revision.sql` is not applied
 - Local mirrors: `player_market_state.csv`, append `player_market_ticks.csv`
 
 **Design decision — read Fair Value from CSV in same job:** Avoids scanning millions of game rows from Postgres when the file was just written locally in CI.
@@ -202,12 +207,14 @@ flowchart LR
 |-------------|--------|
 | `test_projection_engine.py` | Form/minutes signals |
 | `test_demand_engine.py` | Recency, per-user cap |
-| `test_market_engine.py` | Mean reversion, caps, cold start |
-| `test_fair_value_engine.py` | IPO and smoothing |
+| `test_market_engine.py` | Mean reversion, caps, cold start, diagnostic-only levers |
+| `test_fair_value_engine.py` | `g*`, sample confidence, IPO continuity, DNP carry-forward, determinism, validation |
+| `test_market_pipeline.py` | Time scaling, availability, abort-on-read-failure, coherent publish, 22 adversarial scenarios (fake Supabase client) |
+| `test_update_market_state.py` | Row assembly, injury gate, sentiment smoothing |
 | `test_news_sentiment.py` | Headline scoring |
-| `test_team_context_engine.py` | Win% lever |
+| `test_team_context_engine.py` | Win% score |
 
-Run: `pytest` from repo root (requires `requirements.txt`).
+Run: `pytest` from repo root (requires `requirements.txt`). Web: `cd web && npm test` (portfolio marking / accounting, Node's built-in runner).
 
 ---
 
@@ -220,7 +227,8 @@ Run: `pytest` from repo root (requires `requirements.txt`).
 | Smoothing vs raw game score | Reduces single-game noise in Fair Value |
 | Separate market step post-sync | Market has state; Fair Value is pure function of games |
 | External sentiment in market step only | Fundamentals stay objective; narrative affects tradable price only |
-| Injury gate (`injury_active_window_days`) | Avoid offseason “Out” discounts on entire league |
+| Injury gate (`injury_active_window_days`) | Avoid offseason “Out” discounts on entire league; in season the discount lasts while listed |
+| Deferred, combined revision bump | Web never pairs new Fair Value with the previous Market Price |
 
 ---
 

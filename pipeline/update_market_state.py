@@ -3,10 +3,16 @@ Update the Market Price layer (Layer 2).
 
 Runs every ingestion cycle, AFTER Fair Value has been synced. Unlike Fair Value
 (recomputed from scratch each run), Market Price has *memory*: this step reads
-the previous Market Price from Supabase, nudges it toward a Fair-Value-anchored
-target using the projection / sentiment / team-context / demand levers, applies
-mean reversion + caps, and upserts the new state. That is what lets price keep
-moving between games and during the offseason — without ever moving randomly.
+the previous Market Price from Supabase, nudges it toward the target
+``FV × availability × (1 + news sentiment + demand premium)``, applies
+mean reversion + caps scaled by the time since the previous state, and upserts
+the new state. Projection and team-context scores are computed and stored for
+the UI but carry weight 0 in the price. No random movement anywhere.
+
+Failure handling: a failed read of the previous state or trades aborts the run
+before any write (only a missing table is treated as "first run"). Players with
+a missing or non-positive Fair Value are skipped, keeping their previous state.
+Re-running soon after a cycle moves price only by the elapsed fraction of one.
 
 Data sources
 ------------
@@ -19,7 +25,9 @@ Outputs
 -------
 - Upserts ``public.player_market_state`` (current) and
   ``public.player_market_history`` (today's row), appends
-  ``public.player_market_ticks`` (intraday chart feed), then bumps market_revision.
+  ``public.player_market_ticks`` (intraday chart feed), then publishes the Fair
+  Value and Market Price revisions together (``publish_pricing_revision`` RPC,
+  falling back to ``bump_prices_revision`` + ``bump_market_revision``).
 - Also writes ``data/player_market_state.csv`` for local inspection / local web.
 
 Run from repo root after sync:
@@ -28,8 +36,10 @@ Run from repo root after sync:
 from __future__ import annotations
 
 import csv
+import json
 import os
 import sys
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -41,12 +51,15 @@ _PIPELINE_DIR = Path(__file__).resolve().parent
 if str(_PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(_PIPELINE_DIR))
 
+from availability import AvailabilityResult, compute_availability  # noqa: E402
 from demand_engine import build_demand_window, compute_demand  # noqa: E402
 from espn_injuries import fetch_injuries, normalize_name  # noqa: E402
 from news_sentiment import fetch_news_sentiment  # noqa: E402
 from market_config import (  # noqa: E402
     DEFAULT_CONFIG,
+    PRICING_MODEL_VERSION,
     MarketConfig,
+    elapsed_cycle_fraction,
     is_game_night_event,
 )
 from market_engine import compute_market_price  # noqa: E402
@@ -100,9 +113,31 @@ def build_player_market_row(
     age_ref_date: date | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
     event_mode: bool = False,
+    elapsed_fraction: float = 1.0,
+    updated_at: str | None = None,
 ) -> dict[str, Any]:
-    """Compute a full player_market_state row for one player (no I/O)."""
+    """
+    Compute a full player_market_state row for one player (no I/O).
+
+    Injury fields on ``sentiment_input`` feed the availability adjustment on the
+    Fair Value anchor and are removed from sentiment, so an injury is counted
+    once. ``sentiment_score`` therefore reflects news only.
+    """
     ref = age_ref_date or date.today()
+    availability = AvailabilityResult()
+    if sentiment_input is not None:
+        severity = sentiment_input.injury_severity
+        if severity is None and sentiment_input.injury_flag:
+            severity = 0.5
+        availability = compute_availability(
+            severity, sentiment_input.injury_status, config,
+        )
+        sentiment_input = replace(
+            sentiment_input,
+            injury_flag=False,
+            injury_severity=None,
+            injury_status=None,
+        )
     player_age = profile_age_on(player_profile, ref)
     projection = compute_projection(
         season_games,
@@ -140,8 +175,10 @@ def build_player_market_row(
         sentiment=sentiment,
         team_context=team_context,
         demand=demand,
+        availability=availability,
         config=config,
         event_mode=event_mode,
+        elapsed_fraction=elapsed_fraction,
     )
 
     levers = result.levers
@@ -173,6 +210,7 @@ def build_player_market_row(
         "premium_capped": bool(result.premium_capped),
         "explanation": result.explanation(),
         "as_of_date": as_of_date,
+        "updated_at": updated_at or datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -233,21 +271,19 @@ def injury_signal_active(
     window_days: int,
 ) -> bool:
     """
-    Should the injury discount apply to this player right now?
+    Should the availability discount apply to this listed player right now?
 
-    False when basketball isn't actively being played — either the whole league
-    has been idle longer than ``window_days`` (offseason) or this player hasn't
-    appeared in a game within ``window_days`` of the latest league game
-    (eliminated / inactive / season-ending injury already priced). This stops
-    "Out" from discounting nearly every player in July and benched/eliminated
-    players in the playoffs.
+    False when basketball isn't actively being played (the whole league has been
+    idle longer than ``window_days`` — offseason), so "Out" doesn't discount
+    nearly every player in July. A listed player who simply hasn't played for a
+    while keeps the discount for as long as ESPN lists him: Fair Value carries
+    forward through missed games, so the absence is not already in the price.
+    ``player_last_game`` must be known (the player has Fair Value history).
     """
     if ref_game_date is None or player_last_game is None:
         return False
     if (as_of - ref_game_date).days > window_days:
         return False  # league offseason / long idle
-    if (ref_game_date - player_last_game).days > window_days:
-        return False  # player not in current rotation
     return True
 
 
@@ -352,45 +388,103 @@ def assemble_inputs_for_players(
 # ---------------------------------------------------------------------------
 # Supabase I/O
 # ---------------------------------------------------------------------------
-def fetch_prev_market_state(
-    client,
-) -> tuple[dict[int, float], dict[int, float], dict[int, float]]:
-    """Returns (prev_market_price, prev_sentiment_score, prev_fair_value) maps."""
-    prices: dict[int, float] = {}
-    sentiments: dict[int, float] = {}
-    fair_values: dict[int, float] = {}
+def is_valid_fair_value(value: Any) -> bool:
+    """Finite and strictly positive — anything else must not anchor a Market Price."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return False
+    return v == v and v not in (float("inf"), float("-inf")) and v > 0.0
+
+
+def minutes_since(previous_iso: Any, now: datetime) -> float | None:
+    """Minutes between a stored ``updated_at`` and ``now`` (None if unparseable)."""
+    ts = _parse_ts(previous_iso)
+    if ts is None:
+        return None
+    return max(0.0, (now.timestamp() - ts) / 60.0)
+
+
+def resolve_event_mode(
+    fair_value: float,
+    prev_fair_value: float | None,
+    prev_model_version: str | None,
+    config: MarketConfig = DEFAULT_CONFIG,
+) -> bool:
+    """
+    Game-night mode only when Fair Value jumped under the *same* pricing model.
+    A model change restates Fair Value for everyone; that is not a game.
+    """
+    if prev_model_version != PRICING_MODEL_VERSION:
+        return False
+    return is_game_night_event(
+        fair_value, prev_fair_value, threshold=config.event_fair_value_jump_threshold,
+    )
+
+
+def is_missing_relation_error(exc: BaseException) -> bool:
+    """True when PostgREST says the table/function does not exist (first run)."""
+    text = str(exc)
+    return any(
+        marker in text
+        for marker in ("42P01", "PGRST205", "PGRST202", "42883", "Could not find the")
+    )
+
+
+def parse_prev_state_rows(rows: list[dict]) -> dict[int, dict[str, Any]]:
+    """player_id -> previous state fields used for continuity (pure)."""
+    out: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        try:
+            pid = int(r["player_id"])
+            price = float(r["market_price"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        state: dict[str, Any] = {"market_price": price}
+        for key in ("sentiment_score", "fair_value"):
+            try:
+                if r.get(key) is not None:
+                    state[key] = float(r[key])
+            except (TypeError, ValueError):
+                pass
+        state["updated_at"] = r.get("updated_at")
+        exp = r.get("explanation")
+        if isinstance(exp, str):
+            try:
+                exp = json.loads(exp)
+            except ValueError:
+                exp = None
+        state["model_version"] = (
+            exp.get("pricing_model_version") if isinstance(exp, dict) else None
+        )
+        out[pid] = state
+    return out
+
+
+def fetch_prev_market_state(client) -> dict[int, dict[str, Any]]:
+    """Previous state per player. Raises on any read error (caller decides)."""
+    rows: list[dict] = []
     page = 1000
     start = 0
     while True:
         resp = (
             client.table("player_market_state")
-            .select("player_id, market_price, sentiment_score, fair_value")
+            .select(
+                "player_id, market_price, sentiment_score, fair_value, "
+                "updated_at, explanation"
+            )
+            .order("player_id")
             .range(start, start + page - 1)
             .execute()
         )
         data = resp.data or []
         if not data:
             break
-        for r in data:
-            try:
-                pid = int(r["player_id"])
-                prices[pid] = float(r["market_price"])
-            except (TypeError, ValueError, KeyError):
-                continue
-            try:
-                if r.get("sentiment_score") is not None:
-                    sentiments[pid] = float(r["sentiment_score"])
-            except (TypeError, ValueError):
-                pass
-            try:
-                if r.get("fair_value") is not None:
-                    fair_values[pid] = float(r["fair_value"])
-            except (TypeError, ValueError):
-                pass
+        rows.extend(data)
         if len(data) < page:
             break
         start += page
-    return prices, sentiments, fair_values
+    return parse_prev_state_rows(rows)
 
 
 def fetch_recent_trades(client, window_days: int) -> dict[int, list[dict]]:
@@ -454,6 +548,25 @@ def _parse_ts(value: Any) -> float | None:
             return datetime.fromisoformat(s.split(".")[0] + "+00:00").timestamp()
         except ValueError:
             return None
+
+
+def publish_revisions(client) -> str:
+    """
+    Make the new Fair Value and Market Price visible together. Uses the single
+    ``publish_pricing_revision`` RPC (supabase/pricing_revision.sql) when it is
+    installed; otherwise falls back to the two existing bump RPCs.
+    """
+    try:
+        client.rpc(
+            "publish_pricing_revision", {"p_model_version": PRICING_MODEL_VERSION},
+        ).execute()
+        return "publish_pricing_revision"
+    except Exception as e:  # noqa: BLE001
+        if not is_missing_relation_error(e):
+            raise
+    client.rpc("bump_prices_revision", {}).execute()
+    client.rpc("bump_market_revision", {}).execute()
+    return "bump_prices_revision + bump_market_revision"
 
 
 def write_local_csv(rows: list[dict[str, Any]]) -> None:
@@ -528,11 +641,11 @@ def main() -> None:
     else:
         print("  team context: no W/L data found — staying neutral.")
 
-    injuries = fetch_injuries()  # fail-safe: {} on any error -> neutral sentiment
+    injuries = fetch_injuries()  # fail-safe: {} on any error -> fully available
     if injuries:
-        print(f"  sentiment: {len(injuries)} injured players from ESPN feed.")
+        print(f"  availability: {len(injuries)} injured players from ESPN feed.")
     else:
-        print("  sentiment: no injury data (feed empty/unavailable) — staying neutral.")
+        print("  availability: no injury data (feed empty/unavailable) — no discounts.")
 
     # Reference dates for the offseason / not-playing injury gate.
     as_of_date_obj = datetime.fromisoformat(as_of).date()
@@ -548,7 +661,7 @@ def main() -> None:
         league_idle_days = (as_of_date_obj - ref_game_date).days
         if league_idle_days > config.injury_active_window_days:
             print(
-                f"  sentiment: league idle {league_idle_days}d (> "
+                f"  availability: league idle {league_idle_days}d (> "
                 f"{config.injury_active_window_days}d) — injury discounts off (offseason)."
             )
 
@@ -561,51 +674,51 @@ def main() -> None:
 
     url, key = _supabase_env()
     client = None
-    prev_prices: dict[int, float] = {}
-    prev_sentiment: dict[int, float] = {}
-    prev_fair_values: dict[int, float] = {}
+    prev_state: dict[int, dict[str, Any]] = {}
     trades_by_player: dict[int, list[dict]] = {}
 
     if url and key:
         from supabase import create_client
 
         client = create_client(url, key)
+        # A failed read must not look like "no previous state": that would
+        # cold-start every player (or zero demand) and publish it. Only a missing
+        # table (first run) is treated as empty; anything else aborts before writes.
         try:
-            prev_prices, prev_sentiment, prev_fair_values = fetch_prev_market_state(
-                client,
-            )
-            print(f"  loaded {len(prev_prices)} previous Market Prices.")
-        except Exception as e:  # noqa: BLE001 - first run before table exists
+            prev_state = fetch_prev_market_state(client)
+            print(f"  loaded {len(prev_state)} previous Market Prices.")
+        except Exception as e:  # noqa: BLE001
+            if not is_missing_relation_error(e):
+                print(f"Aborting: could not read player_market_state ({e}).", file=sys.stderr)
+                sys.exit(1)
             print(f"  (no previous Market Price state yet: {e})")
         try:
             trades_by_player = fetch_recent_trades(client, config.demand_window_days)
             print(f"  loaded recent trades for {len(trades_by_player)} players.")
         except Exception as e:  # noqa: BLE001
-            print(f"  (skipping demand — trades unavailable: {e})")
+            if not is_missing_relation_error(e):
+                print(f"Aborting: could not read trades ({e}).", file=sys.stderr)
+                sys.exit(1)
+            print(f"  (skipping demand — trades table not installed: {e})")
     else:
         # Local fallback: reuse previous local CSV for continuity if present.
         if MARKET_STATE_CSV.is_file():
             prev_df = pd.read_csv(MARKET_STATE_CSV)
-            has_sent = "sentiment_score" in prev_df.columns
-            for r in prev_df.itertuples(index=False):
-                try:
-                    prev_prices[int(r.player_id)] = float(r.market_price)
-                except (TypeError, ValueError):
-                    continue
-                if has_sent:
-                    try:
-                        prev_sentiment[int(r.player_id)] = float(r.sentiment_score)
-                    except (TypeError, ValueError):
-                        pass
-                try:
-                    prev_fair_values[int(r.player_id)] = float(r.fair_value)
-                except (TypeError, ValueError, AttributeError):
-                    pass
+            prev_state = parse_prev_state_rows(prev_df.to_dict("records"))
         print("  SUPABASE creds not set — local CSV-only run (demand defaults to 0).")
 
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     event_count = 0
+    skipped_invalid = 0
     rows: list[dict[str, Any]] = []
     for pid, info in inputs.items():
+        if not is_valid_fair_value(info["fair_value"]):
+            # Leave the previous state untouched rather than anchor to $0.
+            skipped_invalid += 1
+            continue
+        prev = prev_state.get(pid, {})
+        same_model = prev.get("model_version") == PRICING_MODEL_VERSION
         team_abbr = info["team_abbr"]
         wp = team_win_pct.get(team_abbr)
         team_input = (
@@ -614,8 +727,7 @@ def main() -> None:
 
         name_key = normalize_name(info["player_name"])
         injury = injuries.get(name_key) if injuries else None
-        # Drop stale "Out" tags when basketball isn't being played (offseason) or
-        # the player isn't in the current rotation (eliminated / inactive).
+        # Drop injury listings when basketball isn't being played (offseason).
         if injury is not None and not injury_signal_active(
             last_game_by_player.get(pid),
             ref_game_date,
@@ -639,10 +751,8 @@ def main() -> None:
                 top_headline=top_headline,
             )
 
-        event_mode = is_game_night_event(
-            info["fair_value"],
-            prev_fair_values.get(pid),
-            threshold=config.event_fair_value_jump_threshold,
+        event_mode = resolve_event_mode(
+            info["fair_value"], prev.get("fair_value"), prev.get("model_version"), config,
         )
         if event_mode:
             event_count += 1
@@ -653,26 +763,33 @@ def main() -> None:
                 player_name=info["player_name"],
                 team_abbr=team_abbr,
                 fair_value=info["fair_value"],
-                prev_market_price=prev_prices.get(pid),
+                prev_market_price=prev.get("market_price"),
                 season_games=info["season_games"],
                 prior_season_avg_game_score=info["prior_season_avg_game_score"],
                 demand_trades=trades_by_player.get(pid),
                 as_of_date=as_of,
                 team_context_input=team_input,
                 sentiment_input=sentiment_input,
-                prev_sentiment_score=prev_sentiment.get(pid),
+                # Older states folded injury into sentiment; don't carry that over.
+                prev_sentiment_score=prev.get("sentiment_score") if same_model else None,
                 player_profile=info.get("player_profile"),
                 age_ref_date=info.get("age_ref_date"),
                 config=config,
                 event_mode=event_mode,
+                elapsed_fraction=elapsed_cycle_fraction(
+                    minutes_since(prev.get("updated_at"), now), config,
+                ),
+                updated_at=now_iso,
             )
         )
 
     if event_count:
         print(f"  game-night event mode: {event_count} players (fair value jump).")
+    if skipped_invalid:
+        print(f"  skipped {skipped_invalid} players with missing/non-positive Fair Value.")
 
     write_local_csv(rows)
-    recorded_at = datetime.now(timezone.utc).isoformat()
+    recorded_at = now_iso
     append_local_ticks(rows, recorded_at)
 
     if client is None:
@@ -719,8 +836,8 @@ def main() -> None:
         chunk = ticks[i : i + BATCH]
         client.table("player_market_ticks").insert(chunk).execute()
 
-    client.rpc("bump_market_revision", {}).execute()
-    print("Done. Market Price published; market_revision bumped.")
+    via = publish_revisions(client)
+    print(f"Done. Fair Value + Market Price published via {via}.")
 
 
 if __name__ == "__main__":

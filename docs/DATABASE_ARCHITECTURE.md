@@ -14,6 +14,7 @@ erDiagram
     timestamptz updated_at
     bigint market_revision
     timestamptz market_updated_at
+    text pricing_model_version "nullable; pricing_revision.sql"
     text max_dataset_season
     bigint[] played_player_ids
   }
@@ -136,7 +137,7 @@ erDiagram
 | `player_game_prices` | One per player per game | `sync_prices_to_supabase.py` (truncate + insert) | Next.js `marketData.ts` (anon SELECT) |
 | `active_players` | Current tradable roster IDs | Same sync | Filter board to active NBA players |
 | `player_board` | One per active player | Same sync (tickers from `ticker_assign.py`) | Market table, player pages |
-| `prices_snapshot_meta` | Singleton | `bump_prices_revision()`, sync updates season fields | Cache key for price bundle |
+| `prices_snapshot_meta` | Singleton | `publish_pricing_revision()` (CI) or `bump_prices_revision()` (standalone sync); sync updates season fields | Cache key for price bundle |
 
 **Design intent:** Fair Value is derived entirely from batch CSV output. The database mirrors `data/player_game_prices.csv` for Vercel deployments that do not mount the repo `data/` folder.
 
@@ -147,9 +148,16 @@ erDiagram
 | `player_market_state` | One per active player | `update_market_state.py` upsert | `marketState.ts`, quotes, trade mid |
 | `player_market_history` | One per player per calendar day | Daily upsert | Long-horizon charts |
 | `player_market_ticks` | One per player per pipeline cycle | Insert (append) | Intraday stock-style charts |
-| `prices_snapshot_meta.market_revision` | Singleton field | `bump_market_revision()` | Invalidate market cache without new games |
+| `prices_snapshot_meta.market_revision` | Singleton field | `publish_pricing_revision()` or `bump_market_revision()` | Invalidate market cache without new games |
 
-**Design intent:** Market Price retains **memory** across cycles (`prev_market_price`, sentiment EMA). Unlike Layer 1, these tables are never truncated in production.
+**Design intent:** Market Price retains **memory** across cycles (`market_price`, `updated_at`, sentiment EMA, `explanation.pricing_model_version`). Unlike Layer 1, these tables are never truncated in production; ticks are append-only.
+
+**Column semantics (pricing model `2026-10-fv2-mkt2`):**
+
+- `fair_value` — Fair Value the row was computed from (box score only); `premium_pct` is measured against it and includes any availability discount.
+- `sentiment_score` / `sentiment_adjustment` — **news only**. Before this model, injury severity was folded into `sentiment_score`; it now lives in `explanation.availability`. Rows written by older code have no `explanation.pricing_model_version`.
+- `projection_*` / `team_context_*` — scores are still computed and stored (Radar, outlook); the `*_adjustment` columns are 0 because the default weights are 0.
+- `updated_at` — now written explicitly every cycle (previously it kept the insert time); it drives time-scaled reversion.
 
 ### 2.3 Paper trading (transactional)
 
@@ -167,7 +175,8 @@ erDiagram
 |--------|------|--------|---------|
 | `truncate_prices_for_reload()` | `SECURITY DEFINER` | `service_role` | Atomic wipe of Layer 1 tables before bulk insert |
 | `bump_prices_revision()` | SQL | `service_role` | Increment `revision` after Fair Value reload |
-| `bump_market_revision()` | SQL | `service_role` | Increment `market_revision` after market cycle |
+| `bump_market_revision()` | SQL | `service_role` | Increment `market_revision` after market cycle (fallback) |
+| `publish_pricing_revision(text)` | SQL, `SECURITY DEFINER` | `service_role` | Bump `revision` + `market_revision` and record `pricing_model_version` in one statement |
 | `execute_paper_trade(...)` | PL/pgSQL | `service_role` via `/api/trade` | Atomic buy/sell with weighted avg cost basis |
 | `handle_new_user()` | Trigger on `auth.users` | Supabase Auth | Create `$100,000` portfolio on signup |
 
@@ -217,6 +226,7 @@ Run once in Supabase SQL Editor (order matters):
 7. `player_board.sql` — tickers + extended truncate RPC
 8. `market_price_layer.sql` — Layer 2 tables + `bump_market_revision`
 9. `market_price_ticks.sql` — optional if layer file already includes ticks
+10. `pricing_revision.sql` — additive: nullable `pricing_model_version` column + `publish_pricing_revision`. Optional; without it the pipeline falls back to the two bump RPCs.
 
 ---
 
@@ -238,8 +248,8 @@ The web app does not subscribe to Realtime for prices. Instead:
 
 | Signal | Field | When bumped |
 |--------|-------|-------------|
-| Fair Value reload | `prices_snapshot_meta.revision` | After `sync_prices_to_supabase.py` |
-| Market cycle | `prices_snapshot_meta.market_revision` | After `update_market_state.py` |
+| Fair Value reload | `prices_snapshot_meta.revision` | At the end of `update_market_state.py` in CI (sync runs with `--defer-revision-bump`); at the end of a standalone sync otherwise |
+| Market cycle | `prices_snapshot_meta.market_revision` | At the end of `update_market_state.py`, in the same statement as `revision` |
 
 `marketData.ts` and `marketState.ts` embed these values in cache keys so a deploy without code changes picks up new data on the next request after the pipeline runs.
 
@@ -253,7 +263,7 @@ The web app does not subscribe to Realtime for prices. Instead:
 
 ### Separate `market_revision` from `revision`
 
-Fair Value can reload without recomputing market state in failure scenarios, and market can tick between games without rewriting the entire game-price table.
+Market can tick between games without rewriting the entire game-price table. In CI both keys move together after the market step, so the web never pairs a new Fair Value with the previous Market Price.
 
 ### JSON `explanation` on market state
 

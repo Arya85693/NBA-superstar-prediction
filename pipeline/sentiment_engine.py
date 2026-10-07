@@ -2,11 +2,10 @@
 Sentiment engine — converts news / social signal into a normalised score in
 ``[-1, 1]`` that nudges Market Price above or below Fair Value.
 
-DORMANT BY DESIGN. There is no news integration yet, so :func:`compute_sentiment`
-returns a neutral ``0.0`` and the Market Price engine ignores the lever. The
-contract, weighting and explanation plumbing already exist, so wiring a real
-provider later (RSS, X/Twitter, injury feeds, an LLM analyst) is additive:
-populate :class:`SentimentInput` and return a real score — no caller changes.
+Live input is RSS news (``headline_score``, confidence-scaled by article count).
+Injury listings are **not** passed here by the pipeline: they scale the Fair
+Value anchor through ``availability.py`` instead, so an injury is counted once.
+The ``injury_*`` fields remain supported for direct callers and older tests.
 """
 from __future__ import annotations
 
@@ -39,10 +38,8 @@ def compute_sentiment(
     """
     Blend available sentiment signals into a single clamped score in [-1, 1].
 
-    ``None`` (or all-empty input) => neutral 0.0. Today the live signals are the
-    ESPN injury feed (``injury_severity``) and RSS news (``headline_score``);
-    ``social_buzz`` activates automatically once a provider is wired — no caller
-    changes needed.
+    ``None`` (or all-empty input) => neutral 0.0. The live signal is RSS news
+    (``headline_score``); ``injury_severity`` is honoured when a caller supplies it.
 
     Confidence: the news headline is scaled by ``min(1, article_count / N)`` so a
     single headline can't swing price as hard as several corroborating ones.

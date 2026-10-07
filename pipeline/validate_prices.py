@@ -20,8 +20,10 @@ def run_validation(
     df: pd.DataFrame | None = None,
 ) -> bool:
     """
-    Returns True if all rows satisfy PRICE_FLOOR <= price <= PRICE_CEILING
-    and (player_id, game_id, game_date) keys are unique when a frame is available.
+    Returns True if every price is finite and positive, all rows satisfy
+    PRICE_FLOOR <= price <= PRICE_CEILING, and (player_id, game_id, game_date) keys
+    are unique when a frame is available. A zero or missing Fair Value would become
+    the Market Price anchor, so it fails validation instead of being published.
     If ``prices`` is omitted, loads ``csv_path`` or OUTPUT_CSV.
     """
     frame = df
@@ -33,6 +35,8 @@ def run_validation(
         assert frame is not None
         series = frame["price_after_game"]
 
+    series = pd.to_numeric(series, errors="coerce")
+    invalid = int((series.isna() | (series <= 0)).sum())
     below = int((series < PRICE_FLOOR).sum())
     above = int((series > PRICE_CEILING).sum())
     src = str(path)
@@ -40,9 +44,10 @@ def run_validation(
         f"validate_prices: n={len(series)}  "
         f"min={series.min():.4f}  max={series.max():.4f}  "
         f"allowed=[{PRICE_FLOOR}, {PRICE_CEILING}]  "
-        f"below_floor={below}  above_ceiling={above}  ({src})"
+        f"below_floor={below}  above_ceiling={above}  "
+        f"missing_or_nonpositive={invalid}  ({src})"
     )
-    ok = below == 0 and above == 0
+    ok = below == 0 and above == 0 and invalid == 0
 
     if frame is not None:
         needed = {"player_id", "game_id", "game_date"}

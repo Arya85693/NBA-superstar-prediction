@@ -70,7 +70,7 @@ def main() -> None:
         check=True,
     )
     subprocess.run(
-        [sys.executable, "pipeline/sync_prices_to_supabase.py"],
+        [sys.executable, "pipeline/sync_prices_to_supabase.py", "--defer-revision-bump"],
         cwd=REPO_ROOT,
         env=env,
         check=True,

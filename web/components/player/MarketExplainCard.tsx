@@ -98,9 +98,9 @@ export function MarketExplainCard({ market }: { market: MarketQuote }) {
         ) : (
           <>
             <strong className="font-medium text-muted-foreground">How it works:</strong>{" "}
-            Fair Value updates from games. Market Price drifts toward Fair Value plus
-            explainable premiums from projections, demand, sentiment and team context —
-            with movement caps so it can never be pumped. No random movement.
+            Fair Value updates from games. Market Price drifts toward Fair Value, adjusted
+            for injury availability plus bounded premiums from news sentiment and user
+            demand — with movement caps so it can never be pumped. No random movement.
           </>
         )}
       </p>

@@ -7,13 +7,17 @@ Requires (environment variables — never commit these):
 
 Run from repo root after the pipeline has produced CSVs:
   pip install -r requirements.txt
-  python pipeline/sync_prices_to_supabase.py
+  python pipeline/sync_prices_to_supabase.py [--defer-revision-bump]
+
+``--defer-revision-bump`` skips ``bump_prices_revision`` so the market step can
+publish the Fair Value and Market Price revisions together (CI does this).
 
 Apply supabase/prices_tables.sql in the Supabase SQL Editor once before the first sync.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import os
 import sys
@@ -155,6 +159,14 @@ def _insert_price_batches(client, rows: list[dict]) -> int:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument(
+        "--defer-revision-bump",
+        action="store_true",
+        help="Leave prices_snapshot_meta.revision for update_market_state.py to publish.",
+    )
+    args = parser.parse_args()
+
     _load_supabase_env_fallbacks()
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
@@ -191,6 +203,15 @@ def main() -> None:
             seen_keys.add(pk)
             price_rows.append(parsed)
             price_ids.add(parsed["player_id"])
+
+    nonpositive = sum(1 for r in price_rows if r["price_after_game"] <= 0)
+    if nonpositive:
+        print(
+            f"Refusing to sync: {nonpositive} rows have a missing or non-positive "
+            "Fair Value. The remote market was left unchanged.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     active_ids_ordered: list[int] = []
     seen_active: set[int] = set()
@@ -341,6 +362,9 @@ def main() -> None:
         )
     print(f"  player_board: {len(tick_map)} tickers.")
 
+    if args.defer_revision_bump:
+        print("Deferring prices revision bump to update_market_state.py.")
+        return
     print("Bumping prices_snapshot_meta.revision …")
     _execute(client.rpc("bump_prices_revision", {}), "bump_prices_revision")
     print("Done. Set PRICES_SOURCE=supabase on Vercel and redeploy.")

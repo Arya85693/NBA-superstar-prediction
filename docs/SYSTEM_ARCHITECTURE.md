@@ -171,15 +171,16 @@ Server Components call `marketData.ts` directly (no HTTP hop). Client trade UI c
 | `data_cleaning.py` | Normalize box scores → `cleaned_game_logs.csv` |
 | `game_score.py` | Hollinger game score (GmSc) per game |
 | `price_engine.py` | **Layer 1 — Fair Value** from game scores + season IPO anchors |
-| `projection_engine.py` | Recent-form lever for Market Price target |
-| `sentiment_engine.py` | Injury + news headline lever |
-| `team_context_engine.py` | Team win% lever (from ingested W/L) |
+| `projection_engine.py` | Recent-form score — stored for Radar/outlook, weight 0 in Market Price |
+| `sentiment_engine.py` | News headline lever |
+| `availability.py` | Injury availability factor on the Fair Value anchor |
+| `team_context_engine.py` | Team win% score (from ingested W/L) — stored, weight 0 in Market Price |
 | `demand_engine.py` | User trade-flow lever (recency-weighted, per-user capped) |
 | `market_engine.py` | **Layer 2 — Market Price** (mean reversion, caps, attribution) |
 | `market_config.py` | Central tunables for Layer 2 |
 | `run_pipeline.py` | Orchestrates fetch → clean → score → fair value |
 | `sync_prices_to_supabase.py` | Full reload of Fair Value tables + tickers |
-| `update_market_state.py` | Incremental Market Price upsert + ticks |
+| `update_market_state.py` | Incremental Market Price upsert + ticks, then publishes Fair Value + Market Price revisions together |
 | `update_market_local.py` | Local wrapper matching CI (pipeline + sync + market) |
 | `validate_prices.py` | Sanity checks on Fair Value output |
 | `ticker_assign.py` | Deterministic player tickers (mirrors `web/lib/playerTicker.ts`) |
@@ -193,6 +194,7 @@ Server Components call `marketData.ts` directly (no HTTP hop). Client trade UI c
 | `lib/marketData.ts` | Price bundle loader (CSV or Supabase), merges Layer 1 + Layer 2 |
 | `lib/marketState.ts` | Reads `player_market_state`, revision-based cache busting |
 | `lib/portfolioStore.ts` | Service-role portfolio CRUD |
+| `lib/portfolioMath.ts` | Pure marking / P&L math (holdings marked at Market Price mid) |
 | `lib/tradeCosts.ts` | Bid/ask spread around Market Price mid |
 | `components/` | UI: `MarketTable`, `TradePanel`, dashboards, charts (Recharts) |
 
@@ -221,6 +223,7 @@ Migrations are applied manually in the Supabase SQL Editor (no automated migrati
 2. Server loads Market Price mid via `getMarketQuote()`, applies `fillPrice()` spread.
 3. `execute_paper_trade` RPC atomically updates cash, positions, appends `trades` row.
 4. Trade does **not** mutate Market Price directly; fills feed `demand_engine` on the next `update_market_state.py` cycle.
+5. Portfolio holdings are marked at the same Market Price mid (Fair Value, then average cost, only as fallbacks).
 
 ---
 
@@ -231,7 +234,9 @@ Migrations are applied manually in the Supabase SQL Editor (no automated migrati
 | Layer | Updates when | Purpose |
 |-------|----------------|---------|
 | **Fair Value** | After each logged game | Objective basketball value (Hollinger + smoothing) |
-| **Market Price** | Every pipeline cycle (~30 min) | Tradable mid with explainable premiums, mean reversion, anti-manipulation caps |
+| **Market Price** | Every pipeline cycle (~30 min) | Tradable mid: Fair Value × injury availability × (1 + news + demand premium), time-scaled mean reversion, anti-manipulation caps |
+
+Basketball performance is priced once, in Fair Value; projection and team-context scores are displayed but carry weight 0 in Market Price (see MARKET_PRICING_ENGINE.md §3.1).
 
 **Why:** Separating fundamentals from market microstructure mirrors real exchanges, keeps backtests interpretable, and allows the UI to show both “what the stats say” vs “what the market is paying.”
 
@@ -251,13 +256,13 @@ NBA.com ids (`nba_api`) and BALLDONTLIE ids are incompatible. Production standar
 
 `sync_prices_to_supabase.py` truncates `player_game_prices` and re-inserts from CSV rather than incremental merges.
 
-**Why:** Simpler correctness when historical rows can be recomputed; revision bump gives the app a cheap cache-invalidation signal. Trade-off: brief read inconsistency during reload (see bottlenecks).
+**Why:** Simpler correctness when historical rows can be recomputed; revision bump gives the app a cheap cache-invalidation signal. In CI the bump is deferred to the end of the market step (`publish_pricing_revision`) so Fair Value and Market Price become visible together. Trade-off: cold readers can still see a partial table during reload (see bottlenecks).
 
 ### Market Price has memory
 
-`player_market_state` is **upserted**, not truncated. Each cycle reads previous `market_price` and applies mean reversion toward a lever-adjusted target.
+`player_market_state` is **upserted**, not truncated. Each cycle reads previous `market_price` and `updated_at` and applies mean reversion toward a lever-adjusted target, scaled by the elapsed fraction of a 30-minute cycle (so re-runs don't compound). A failed read aborts the cycle rather than cold-starting every player.
 
-**Why:** Prices can move between games (sentiment, demand, drift) without random walks or instant jumps when Fair Value is flat.
+**Why:** Prices can move between games (availability, news, demand, drift) without random walks or instant jumps when Fair Value is flat.
 
 ### Deterministic engines (no RNG)
 

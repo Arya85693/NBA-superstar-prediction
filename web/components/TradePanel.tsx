@@ -96,9 +96,9 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
     <div className="hs-panel p-5 md:p-6">
       <p className="mb-3 text-xs leading-relaxed text-muted">
         Fills execute around the live Market Price with a {roundTripSpreadPct()}% bid/ask spread —
-        buys fill just above the mid, sells just below. Market Price tracks Fair Value plus
-        explainable projection, demand, sentiment and team-context premiums, and refreshes
-        each ingestion cycle (~30 min) — even between games.
+        buys fill just above the mid, sells just below. Market Price tracks Fair Value,
+        adjusted for injury availability plus small news-sentiment and user-demand premiums,
+        and refreshes each ingestion cycle (~30 min) — even between games.
       </p>
       <h3 className="hs-label mb-4">
         Paper trade - {playerName}

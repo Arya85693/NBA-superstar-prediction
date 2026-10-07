@@ -1,16 +1,22 @@
 """
-Player "stock" price from game-level Hollinger game_score.
+Player Fair Value (Layer 1) from game-level Hollinger game_score.
+
+**Effective game score** — one minutes adjustment everywhere:
+``g* = game_score × minutes_factor(minutes)`` with
+``minutes_factor = clamp(minutes / 34, 0.22, 1.08)``. Tonight, the season-to-date
+average, the prior-season anchor and the season-open IPO all use ``g*``.
+Rows with ``minutes <= 0`` (DNP) are not games: Fair Value carries forward.
 
 **Season open (IPO)** — Anchored to **last season’s productivity**, not a single hot streak:
-  - **League percentile** of an **minutes-adjusted** prior-season mean game_score (role players
-    who play fewer MPG get scaled down before ranking, so they don’t price next to MVPs).
-  - Blended with a **direct dollar mapping** of that same adjusted prior average — matches the
-    idea “start-of-season price comes from last season’s averages.”
+  - **League percentile** of the prior-season mean ``g*``, blended with a **direct dollar
+    mapping** of that same mean.
+  - Weighted by sample confidence ``c = min(prior_games / 25, 1)`` against the rookie
+    default, so a short prior season moves the open gradually instead of at a cliff.
 
 **Each game (live path through history)** — Price updates from a blend of:
-  - tonight’s game (minutes-damped),
-  - **prior-season average** game_score (reputation anchor),
-  - **season-to-date average** game_score (what they’ve actually done *this* year so far).
+  - tonight’s ``g*``,
+  - **prior-season mean** ``g*`` (reputation anchor, weighted by ``c``),
+  - **season-to-date mean** ``g*`` (what they’ve actually done *this* year so far).
 
 **Between games** — Price remains flat until the player logs another regular-season or playoff game.
 
@@ -64,10 +70,6 @@ MINUTES_REF = 34.0
 MIN_MINUTES_FACTOR = 0.22
 MAX_MINUTES_FACTOR = 1.08
 
-# Prior-season volume curve for IPO ranking & avg mapping (lower MPG ⇒ lower anchor).
-PRIOR_MPG_REF = 32.0
-PRIOR_MPG_EXPONENT = 1.2
-
 DEFAULT_IPO_PRICE = ROOKIE_IPO_PRICE
 
 PRICE_FLOOR = 0.0
@@ -83,11 +85,32 @@ def prior_season_label(season: str) -> str | None:
     return f"{py}-{str(py + 1)[-2:]}"
 
 
+def played(minutes: float) -> bool:
+    """A row is a game only if the player logged minutes (DNP rows are not games)."""
+    return minutes == minutes and minutes > 0
+
+
+def effective_game_score(game_score: float, minutes: float) -> float:
+    """The single minutes-adjusted production measure used throughout Fair Value."""
+    return float(game_score) * minutes_factor(minutes)
+
+
+def sample_confidence(prior_games: int) -> float:
+    """Weight on the prior-season anchor: 0 with no sample, 1 from MIN_PRIOR_GAMES up."""
+    if prior_games <= 0:
+        return 0.0
+    return min(1.0, prior_games / float(MIN_PRIOR_GAMES))
+
+
 def mean_game_score_by_player_season(df: pd.DataFrame) -> pd.DataFrame:
+    """Per player-season aggregates over played games only (``minutes > 0``)."""
+    sub = df[df["minutes"] > 0].copy()
+    sub["_effective_gs"] = sub["game_score"] * sub["minutes"].map(minutes_factor)
     return (
-        df.groupby(["player_id", "season"], sort=False)
+        sub.groupby(["player_id", "season"], sort=False)
         .agg(
             mean_game_score=("game_score", "mean"),
+            mean_effective_game_score=("_effective_gs", "mean"),
             games=("game_score", "count"),
             mean_minutes=("minutes", "mean"),
         )
@@ -95,19 +118,18 @@ def mean_game_score_by_player_season(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def prior_adjusted_mean_gs(mean_gs: float, mean_mpg: float) -> float:
-    """
-    Down-weight seasons with lower minutes so reserve / specialist profiles don't IPO
-    alongside full-time stars solely on per-minute efficiency.
-    """
-    mp = max(0.0, min(float(mean_mpg), 40.0))
-    vol = min(1.0, (mp / PRIOR_MPG_REF) ** PRIOR_MPG_EXPONENT)
-    return float(mean_gs) * vol
-
-
 def build_prior_mean_lookup(ps: pd.DataFrame) -> dict[tuple[int, str], float]:
+    """Raw mean game_score per player-season (display: ``prior_season_avg_game_score``)."""
     return {
         (int(r.player_id), str(r.season)): float(r.mean_game_score)
+        for r in ps.itertuples(index=False)
+    }
+
+
+def build_prior_effective_lookup(ps: pd.DataFrame) -> dict[tuple[int, str], float]:
+    """Mean effective game score ``g*`` per player-season (pricing anchor)."""
+    return {
+        (int(r.player_id), str(r.season)): float(r.mean_effective_game_score)
         for r in ps.itertuples(index=False)
     }
 
@@ -119,15 +141,8 @@ def build_prior_games_lookup(ps: pd.DataFrame) -> dict[tuple[int, str], int]:
     }
 
 
-def build_prior_mpg_lookup(ps: pd.DataFrame) -> dict[tuple[int, str], float]:
-    return {
-        (int(r.player_id), str(r.season)): float(r.mean_minutes)
-        for r in ps.itertuples(index=False)
-    }
-
-
 def build_league_prior_percentile_lookup(ps: pd.DataFrame) -> dict[tuple[int, str], float]:
-    """Percentile ranks **adjusted** prior-season mean GS (volume-aware)."""
+    """Percentile ranks of season mean effective game score ``g*``."""
     out: dict[tuple[int, str], float] = {}
     for season in ps["season"].unique():
         sub = ps[
@@ -135,13 +150,7 @@ def build_league_prior_percentile_lookup(ps: pd.DataFrame) -> dict[tuple[int, st
         ].copy()
         if sub.empty:
             continue
-        sub["adj_prior"] = sub.apply(
-            lambda r: prior_adjusted_mean_gs(
-                float(r.mean_game_score), float(r.mean_minutes)
-            ),
-            axis=1,
-        )
-        sub["pct_rank"] = sub["adj_prior"].rank(pct=True, method="average")
+        sub["pct_rank"] = sub["mean_effective_game_score"].rank(pct=True, method="average")
         for r in sub.itertuples(index=False):
             out[(int(r.player_id), str(season))] = float(r.pct_rank)
     return out
@@ -158,11 +167,29 @@ def game_score_to_price(gs: float) -> float:
     return PRICE_MIN + t * (PRICE_MAX - PRICE_MIN)
 
 
+def ipo_price(
+    prior_effective_mean: float | None,
+    prior_games: int,
+    league_pct: float | None,
+) -> float:
+    """
+    Season-open price: ``c × anchor + (1 − c) × DEFAULT_IPO_PRICE`` where the anchor
+    blends league percentile dollars with the mapped prior-season mean ``g*``.
+    """
+    c = sample_confidence(prior_games)
+    if prior_effective_mean is None or c <= 0.0:
+        return DEFAULT_IPO_PRICE
+    anchor = game_score_to_price(prior_effective_mean)
+    if league_pct is not None:
+        pct_part = PRICE_MIN + league_pct * (PRICE_MAX - PRICE_MIN)
+        anchor = IPO_PCT_WEIGHT * pct_part + IPO_AVG_MAP_WEIGHT * anchor
+    return c * anchor + (1.0 - c) * DEFAULT_IPO_PRICE
+
+
 def compute_ipo_per_player_season(
     ps: pd.DataFrame,
-    prior_mean_lookup: dict[tuple[int, str], float],
+    prior_effective_lookup: dict[tuple[int, str], float],
     prior_games_lookup: dict[tuple[int, str], int],
-    prior_mpg_lookup: dict[tuple[int, str], float],
     league_pct_lookup: dict[tuple[int, str], float],
 ) -> pd.DataFrame:
     """IPO blends percentile standing with explicit mapped prior-season average."""
@@ -173,20 +200,12 @@ def compute_ipo_per_player_season(
         pid, season = int(r.player_id), str(r.season)
         prev = prior_season_label(season)
         ipo = DEFAULT_IPO_PRICE
-
         if prev:
-            pm = prior_mean_lookup.get((pid, prev))
-            pg = prior_games_lookup.get((pid, prev), 0)
-            mpg = prior_mpg_lookup.get((pid, prev))
-            if pm is not None and pg >= MIN_PRIOR_GAMES and mpg is not None:
-                adj = prior_adjusted_mean_gs(pm, mpg)
-                ipo_avg_part = game_score_to_price(adj)
-                pct = league_pct_lookup.get((pid, prev))
-                if pct is not None:
-                    ipo_pct_part = PRICE_MIN + pct * (PRICE_MAX - PRICE_MIN)
-                    ipo = IPO_PCT_WEIGHT * ipo_pct_part + IPO_AVG_MAP_WEIGHT * ipo_avg_part
-                else:
-                    ipo = ipo_avg_part
+            ipo = ipo_price(
+                prior_effective_lookup.get((pid, prev)),
+                prior_games_lookup.get((pid, prev), 0),
+                league_pct_lookup.get((pid, prev)),
+            )
         ipo_map[(pid, season)] = float(ipo)
 
     out = keys.merge(
@@ -243,12 +262,16 @@ def smoothing_target_live(
     prior_year_mean_gs: float | None,
     season_to_date_mean_gs: float,
     surprise_z: float = 0.0,
+    prior_confidence: float = 1.0,
 ) -> float:
     """
-    Blend tonight, last year's average (anchor), and **this season's average so far**
-    — all mapped to the same dollar band.
+    Blend tonight's ``g*``, last year's mean ``g*`` (anchor), and **this season's mean
+    ``g*`` so far** — all mapped to the same dollar band. ``game_score``/``minutes`` are
+    tonight's raw values; the two means are already effective (minutes-adjusted).
+    The prior-year weight is scaled by ``prior_confidence``; the season average takes
+    the remainder, so ``prior_confidence = 0`` equals having no prior season.
     """
-    p_game = game_score_to_price(game_score * minutes_factor(minutes))
+    p_game = game_score_to_price(effective_game_score(game_score, minutes))
     p_season = game_score_to_price(season_to_date_mean_gs)
 
     w_tonight = (
@@ -256,16 +279,16 @@ def smoothing_target_live(
         if abs(surprise_z) >= SURPRISE_Z_WEIGHT_THRESHOLD
         else WEIGHT_TONIGHT
     )
+    remainder = 1.0 - w_tonight
 
-    if prior_year_mean_gs is not None and not (prior_year_mean_gs != prior_year_mean_gs):
-        p_prior = game_score_to_price(float(prior_year_mean_gs))
-        remainder = 1.0 - w_tonight
-        w_prior = remainder * (WEIGHT_PRIOR_YEAR / (WEIGHT_PRIOR_YEAR + WEIGHT_SEASON_AVG))
-        w_season = remainder * (WEIGHT_SEASON_AVG / (WEIGHT_PRIOR_YEAR + WEIGHT_SEASON_AVG))
-        return w_tonight * p_game + w_prior * p_prior + w_season * p_season
+    c = max(0.0, min(1.0, prior_confidence))
+    if prior_year_mean_gs is None or prior_year_mean_gs != prior_year_mean_gs or c <= 0.0:
+        return w_tonight * p_game + remainder * p_season
 
-    w_season = 1.0 - w_tonight
-    return w_tonight * p_game + w_season * p_season
+    p_prior = game_score_to_price(float(prior_year_mean_gs))
+    w_prior = remainder * (WEIGHT_PRIOR_YEAR / (WEIGHT_PRIOR_YEAR + WEIGHT_SEASON_AVG)) * c
+    w_season = remainder - w_prior
+    return w_tonight * p_game + w_prior * p_prior + w_season * p_season
 
 
 def compute_prices(
@@ -285,15 +308,14 @@ def compute_prices(
 
     ps = mean_game_score_by_player_season(df)
     prior_mean_lookup = build_prior_mean_lookup(ps)
+    prior_effective_lookup = build_prior_effective_lookup(ps)
     prior_games_lookup = build_prior_games_lookup(ps)
-    prior_mpg_lookup = build_prior_mpg_lookup(ps)
     league_pct_lookup = build_league_prior_percentile_lookup(ps)
 
     ipo_df = compute_ipo_per_player_season(
         ps,
-        prior_mean_lookup,
+        prior_effective_lookup,
         prior_games_lookup,
-        prior_mpg_lookup,
         league_pct_lookup,
     )
     ipo_map = {
@@ -317,34 +339,46 @@ def compute_prices(
         current_season: str | None = None
         price = DEFAULT_IPO_PRICE
         ipo_this_season = DEFAULT_IPO_PRICE
+        prior_eff: float | None = None
+        prior_conf = 0.0
         games_in_season = 0
-        season_gs_sum = 0.0
-        season_gs_history: list[float] = []
+        season_eff_sum = 0.0
+        season_eff_history: list[float] = []
 
         for _, row in g.iterrows():
             sea = str(row["season"])
             gs = float(row["game_score"])
-            pm = row["_prior_mean_gs"]
-            prior_val = float(pm) if pd.notna(pm) else None
             mins = float(row["minutes"])
 
             if current_season != sea:
                 current_season = sea
                 games_in_season = 0
-                season_gs_sum = 0.0
-                season_gs_history = []
+                season_eff_sum = 0.0
+                season_eff_history = []
                 ipo_this_season = ipo_map.get((int(pid), sea), DEFAULT_IPO_PRICE)
                 price = ipo_this_season
+                prev = prior_season_label(sea)
+                prior_eff = prior_effective_lookup.get((int(pid), prev)) if prev else None
+                prior_conf = sample_confidence(
+                    prior_games_lookup.get((int(pid), prev), 0) if prev else 0
+                )
 
-            surprise_z = surprise_z_score(gs, season_gs_history)
+            if not played(mins):
+                prices.append(price)
+                ipos_out.append(ipo_this_season)
+                continue
+
+            eff = effective_game_score(gs, mins)
+            surprise_z = surprise_z_score(eff, season_eff_history)
             games_in_season += 1
-            season_gs_sum += gs
-            season_avg_gs = season_gs_sum / games_in_season
-            season_gs_history.append(gs)
+            season_eff_sum += eff
+            season_avg_eff = season_eff_sum / games_in_season
+            season_eff_history.append(eff)
 
             alpha_eff = effective_alpha(alpha, games_in_season, surprise_z)
             target = smoothing_target_live(
-                gs, mins, prior_val, season_avg_gs, surprise_z=surprise_z,
+                gs, mins, prior_eff, season_avg_eff,
+                surprise_z=surprise_z, prior_confidence=prior_conf,
             )
             price = (1.0 - alpha_eff) * price + alpha_eff * target
             price = min(PRICE_CEILING, max(PRICE_FLOOR, price))

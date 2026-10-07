@@ -6,8 +6,8 @@
 --   - public.trades (append-only fill log)
 --   - public.execute_paper_trade(...) RPC (atomic buy/sell)
 --
--- Does NOT wire web/app/api/trade/route.ts yet — the app keeps using portfolioStore.ts
--- until Phase 2 switches the route to supabase.rpc('execute_paper_trade', ...).
+-- Called by web/app/api/trade/route.ts via supabase.rpc('execute_paper_trade', ...) with a
+-- fill price of Market Price mid ± half-spread (web/lib/tradeCosts.ts).
 
 -- ---------------------------------------------------------------------------
 -- 1) Cost basis column on open positions

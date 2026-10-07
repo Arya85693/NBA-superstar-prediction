@@ -84,15 +84,16 @@ def test_explanation_json_roundtrips():
     assert back["fair_value"] == row["fair_value"]
 
 
-def test_team_context_flows_through_to_row():
-    # A winning team should lift Market Price above an identical losing team.
+def test_team_context_is_scored_but_not_priced():
+    # Team record is stored for the UI, but wins already show up in box scores,
+    # so it must not move the tradable price (weight 0).
     winner = _row(prev=100.0, team_input=TeamContextInput(team_win_pct=0.80))
     loser = _row(prev=100.0, team_input=TeamContextInput(team_win_pct=0.20))
     assert winner["team_context_score"] > 0.0
     assert loser["team_context_score"] < 0.0
-    assert winner["team_context_adjustment"] > 0.0
-    assert loser["team_context_adjustment"] < 0.0
-    assert winner["market_price"] > loser["market_price"]
+    assert winner["team_context_adjustment"] == 0.0
+    assert loser["team_context_adjustment"] == 0.0
+    assert winner["market_price"] == loser["market_price"]
 
 
 def test_team_context_none_is_neutral():
@@ -152,9 +153,10 @@ def test_injury_suppressed_in_offseason():
     )
 
 
-def test_injury_suppressed_for_inactive_player():
-    # League is active (game yesterday) but this player hasn't played in weeks.
-    assert not injury_signal_active(
+def test_injury_persists_for_listed_player_who_has_not_played():
+    # League is active but this listed player hasn't played in weeks: Fair Value
+    # has been carried forward, so the absence is not priced — keep the discount.
+    assert injury_signal_active(
         player_last_game=date(2026, 1, 1),
         ref_game_date=date(2026, 2, 1),
         as_of=date(2026, 2, 2),
@@ -167,15 +169,21 @@ def test_injury_gate_none_inputs_are_inactive():
     assert not injury_signal_active(date(2026, 1, 1), None, date(2026, 1, 2), 10)
 
 
-def test_injury_sentiment_flows_through_to_row():
+def test_injury_flows_to_availability_not_sentiment():
     healthy = _row(prev=100.0, sentiment_input=None)
     injured = _row(
         prev=100.0,
         sentiment_input=SentimentInput(injury_severity=0.8, injury_status="Out"),
     )
-    assert injured["sentiment_score"] < 0.0
-    assert injured["sentiment_adjustment"] < 0.0
+    # Counted once, on the anchor: sentiment stays news-only.
+    assert injured["sentiment_score"] == 0.0
+    assert injured["sentiment_adjustment"] == 0.0
+    avail = injured["explanation"]["availability"]
+    assert abs(avail["factor"] - (1.0 - 0.04 * 0.8)) < 1e-9
+    assert avail["status"] == "Out"
+    assert abs(injured["explanation"]["anchor_price"] - 100.0 * avail["factor"]) < 1e-6
     assert injured["market_price"] < healthy["market_price"]
+    assert any("Availability" in d for d in injured["explanation"]["drivers"])
 
 
 def test_no_injury_sentiment_is_neutral():

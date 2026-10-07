@@ -62,8 +62,10 @@ jobs:
           path: data/raw_game_logs.csv
           key: ${{ env.BDL_RAW_CACHE_KEY }}
 
+      # The prices revision is bumped by the market step, together with market_revision,
+      # so the site never serves new Fair Value against the previous Market Price.
       - name: Sync Fair Value to Supabase
-        run: python pipeline/sync_prices_to_supabase.py
+        run: python pipeline/sync_prices_to_supabase.py --defer-revision-bump
 
-      - name: Update Market Price layer
+      - name: Update Market Price layer and publish revisions
         run: python pipeline/update_market_state.py

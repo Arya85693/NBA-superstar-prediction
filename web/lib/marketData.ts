@@ -639,17 +639,22 @@ async function buildMarketRows(): Promise<MarketRow[]> {
     const row = b.latest.get(id);
     if (!row) continue;
 
-    // Fair Value = latest per-game price. Prior-game change is the fallback.
-    const fair_value = row.price_after_game;
+    // Fair Value = latest per-game price; prior-game change measures basketball.
+    const gameFairValue = row.price_after_game;
     const prev = b.prior.get(id);
     const priorGameChangePct: number | null =
       prev && prev.price_after_game > 0
-        ? ((fair_value - prev.price_after_game) / prev.price_after_game) * 100
+        ? ((gameFairValue - prev.price_after_game) / prev.price_after_game) * 100
         : null;
 
     // Layer the Market Price on top when present; otherwise fall back to FV.
+    // Pair it with the Fair Value that the same state row was computed from, so
+    // the premium shown is the premium the engine produced.
     const state = marketStates.get(id);
-    const market_price = state ? state.market_price : fair_value;
+    const hasMarket = state != null && state.market_price > 0;
+    const fair_value =
+      hasMarket && state.fair_value > 0 ? state.fair_value : gameFairValue;
+    const market_price = hasMarket ? state.market_price : fair_value;
     const marketChangePct =
       state?.change_pct != null ? state.change_pct * 100 : null;
     const premium_pct =

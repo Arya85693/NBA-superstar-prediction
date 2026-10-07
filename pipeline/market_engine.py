@@ -1,15 +1,21 @@
 """
 Market Price engine — the heart of Layer 2.
 
-Given a player's **Fair Value** (Layer 1) and the four explainable levers
-(projection, sentiment, team context, demand), plus the player's **previous
-Market Price**, it produces the new Market Price with:
+Given a player's **Fair Value** (Layer 1), an **availability** factor (injury
+listing), the explainable levers and the player's **previous Market Price**, it
+produces the new Market Price with:
 
-  * a Fair-Value-anchored target (FV adjusted by the levers),
-  * mean reversion toward that target (smooth, gradual drift),
-  * a per-cycle movement cap (anti-pump / anti-manipulation),
+  * an anchor ``FV × availability`` and a target ``anchor × (1 + premium)``,
+    where premium sums the weighted levers (projection and team context carry
+    weight 0 by default — they are diagnostics, not price inputs),
+  * mean reversion toward that target, scaled by the elapsed fraction of a
+    nominal cycle so re-runs cannot compound movement,
+  * a per-cycle movement cap (anti-pump / anti-manipulation), scaled the same way,
   * a hard premium band around Fair Value (price can't detach from value),
   * an absolute price clamp.
+
+``premium_pct`` is always measured against box-score Fair Value, so it includes
+the availability discount.
 
 Crucially, **every dollar of movement is attributable**: the result carries the
 contribution of each lever and a human-readable list of drivers. There is no
@@ -24,8 +30,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from availability import AvailabilityResult
 from demand_engine import DemandResult, compute_demand
-from market_config import DEFAULT_CONFIG, MarketConfig, clamp, cycle_limits
+from market_config import (
+    DEFAULT_CONFIG,
+    PRICING_MODEL_VERSION,
+    MarketConfig,
+    clamp,
+    cycle_limits,
+    scaled_cycle_limits,
+)
 from projection_engine import ProjectionResult
 from sentiment_engine import SentimentResult
 from team_context_engine import TeamContextResult
@@ -52,10 +66,24 @@ class MarketPriceResult:
     premium_capped: bool
     levers: dict[str, LeverContribution] = field(default_factory=dict)
     drivers: list[str] = field(default_factory=list)
+    availability: AvailabilityResult = field(default_factory=AvailabilityResult)
+    anchor_price: float = 0.0             # fair value × availability factor
+    elapsed_cycle_fraction: float = 1.0
+    event_mode: bool = False
 
     def explanation(self) -> dict[str, Any]:
         """JSON-serialisable breakdown stored alongside the price."""
         return {
+            "pricing_model_version": PRICING_MODEL_VERSION,
+            "anchor_price": round(self.anchor_price, 4),
+            "availability": {
+                "factor": round(self.availability.factor, 6),
+                "severity": round(self.availability.severity, 4),
+                "status": self.availability.status,
+                "adjustment_pct": round(self.availability.adjustment_pct, 6),
+            },
+            "elapsed_cycle_fraction": round(self.elapsed_cycle_fraction, 4),
+            "event_mode": self.event_mode,
             "fair_value": round(self.fair_value, 4),
             "market_price": round(self.market_price, 4),
             "prev_market_price": round(self.prev_market_price, 4),
@@ -96,15 +124,24 @@ def compute_market_price(
     sentiment: SentimentResult | None = None,
     team_context: TeamContextResult | None = None,
     demand: DemandResult | None = None,
+    availability: AvailabilityResult | None = None,
     config: MarketConfig = DEFAULT_CONFIG,
     event_mode: bool = False,
+    elapsed_fraction: float = 1.0,
 ) -> MarketPriceResult:
     """
     Compute the new Market Price for one player. All lever args are optional and
     default to neutral (score 0), so the minimal call ``compute_market_price(fv,
     prev)`` simply mean-reverts Market Price toward Fair Value.
+
+    ``elapsed_fraction`` is the share of one nominal cycle since the previous
+    state (1.0 = a full cycle; 0.0 = an immediate re-run, which leaves price
+    unchanged). Ignored on cold start.
     """
     fv = clamp(float(fair_value), config.price_floor, config.price_ceiling)
+    avail = availability if availability is not None else AvailabilityResult()
+    anchor = fv * avail.factor
+    frac = clamp(float(elapsed_fraction), 0.0, 1.0)
 
     proj_score = projection.score if projection else 0.0
     sent_score = sentiment.score if sentiment else 0.0
@@ -135,7 +172,15 @@ def compute_market_price(
     premium = clamp(raw_premium, -config.max_premium, config.max_premium)
     premium_capped = abs(raw_premium) > config.max_premium + 1e-12
 
-    target_price = clamp(fv * (1.0 + premium), config.price_floor, config.price_ceiling)
+    # Target = anchor × (1 + premium), then held inside the band around Fair Value
+    # (premium_pct is measured against box-score Fair Value, availability included).
+    target_price = anchor * (1.0 + premium)
+    band_lo = fv * (1.0 - config.max_premium)
+    band_hi = fv * (1.0 + config.max_premium)
+    if target_price < band_lo - 1e-9 or target_price > band_hi + 1e-9:
+        premium_capped = True
+    target_price = clamp(target_price, band_lo, band_hi)
+    target_price = clamp(target_price, config.price_floor, config.price_ceiling)
 
     # Cold start: seed at the target (fair value + explainable premium).
     if prev_market_price is None or prev_market_price <= 0:
@@ -151,6 +196,10 @@ def compute_market_price(
             move_capped=False,
             premium_capped=premium_capped,
             levers=levers,
+            availability=avail,
+            anchor_price=anchor,
+            elapsed_cycle_fraction=1.0,
+            event_mode=False,
         )
         result.drivers = _build_drivers(result, projection, sentiment, dem, seeded=True)
         return result
@@ -158,6 +207,7 @@ def compute_market_price(
     prev = clamp(float(prev_market_price), config.price_floor, config.price_ceiling)
 
     move_cap, reversion = cycle_limits(config, event_mode=event_mode)
+    max_up_pct, max_down_pct, reversion = scaled_cycle_limits(move_cap, reversion, frac)
 
     # Mean reversion: close a fraction of the gap toward the target each cycle.
     reverted = prev + reversion * (target_price - prev)
@@ -169,8 +219,8 @@ def compute_market_price(
     # Market Price catches up smoothly over several cycles (rate-limited here)
     # rather than gapping — and converges into the band because the target sits
     # inside it.
-    max_up = prev * (1.0 + move_cap)
-    max_down = prev * (1.0 - move_cap)
+    max_up = prev * (1.0 + max_up_pct)
+    max_down = prev * (1.0 - max_down_pct)
     capped = clamp(reverted, max_down, max_up)
     move_capped = abs(reverted - capped) > 1e-9
 
@@ -191,6 +241,10 @@ def compute_market_price(
         move_capped=move_capped,
         premium_capped=premium_capped,
         levers=levers,
+        availability=avail,
+        anchor_price=anchor,
+        elapsed_cycle_fraction=frac,
+        event_mode=event_mode,
     )
     result.drivers = _build_drivers(
         result, projection, sentiment, dem, seeded=False, event_mode=event_mode,
@@ -214,6 +268,14 @@ def _build_drivers(
             "Game-night cycle — faster catch-up after new stats were ingested.",
         )
 
+    avail = result.availability
+    line = _driver_line(
+        "Availability", avail.adjustment_pct,
+        f"injury: {avail.status}" if avail.status else "injury listing",
+    )
+    if line:
+        drivers.append(line)
+
     proj_reason = None
     if projection and projection.notes:
         proj_reason = projection.notes[0]
@@ -232,7 +294,7 @@ def _build_drivers(
 
     sent_reason = None
     if sentiment and sentiment.notes:
-        # Skip placeholder notes; use the first real driver (headline / injury).
+        # Skip placeholder notes; use the first real driver (headline).
         sent_reason = next(
             (n for n in sentiment.notes if not n.startswith(("sentiment", "no "))),
             None,

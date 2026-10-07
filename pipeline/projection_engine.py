@@ -3,13 +3,15 @@ Projection engine — estimates a player's *expected future value* relative to
 their current Fair Value, as a normalised score in ``[-1, 1]``.
 
 Positive  => recent signals point above the player's established baseline
-            (improving role / form), so the market should pay a premium.
-Negative  => declining form / shrinking role, so a discount is justified.
+            (improving role / form).
+Negative  => declining form / shrinking role.
 Zero      => not enough signal, or perfectly in line with baseline.
 
-Inputs are intentionally box-score level so this runs from the same data the
-Fair Value engine already produces. Each sub-signal is reported in the result
-so the Market Price explanation can attribute the move.
+Inputs are box-score level — the same data the Fair Value engine already
+prices — so the score is a **diagnostic** (Radar, outlook) and carries weight 0
+in Market Price (``MarketConfig.projection_weight``). The backtest shows it ranks
+future game-score improvement but is negatively related to the next Fair Value
+move; see docs/MARKET_PRICING_ENGINE.md §3.1.
 
 This module is deliberately small and pure; upgrade paths (development curves,
 opponent strength, role-change detection, injury return) plug in as additional

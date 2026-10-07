@@ -1,4 +1,5 @@
 """Market Price engine — reversion, caps, premium band, explainability."""
+import json
 import math
 
 from demand_engine import DemandWindow, compute_demand
@@ -76,7 +77,21 @@ def test_explanation_is_serialisable_and_attributes_levers():
     exp = r.explanation()
     assert set(["fair_value", "market_price", "levers", "drivers"]).issubset(exp.keys())
     assert "projection" in exp["levers"]
-    # Positive projection should push market price above fair value here.
+    # Projection is a diagnostic: scored and stored, but weight 0 in the price.
+    assert proj.score > 0.0
+    assert exp["levers"]["projection"]["score"] > 0.0
+    assert exp["levers"]["projection"]["adjustment_pct"] == 0.0
+    assert r.market_price == 100.0
+    assert not any("Projection" in d for d in r.drivers)
+    assert exp["pricing_model_version"]
+    json.dumps(exp)
+
+
+def test_projection_still_prices_when_weight_is_configured():
+    games = [GameStat(g, 30.0) for g in [5, 5, 5, 5, 5, 25, 26, 27, 28, 29]]
+    proj = compute_projection(games, prior_season_avg_game_score=6.0)
+    cfg = MarketConfig(projection_weight=0.09)
+    r = compute_market_price(100.0, 100.0, projection=proj, config=cfg)
     assert r.market_price > 100.0
     assert any("Projection" in d for d in r.drivers)
 

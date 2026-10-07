@@ -11,8 +11,14 @@ _PIPELINE = Path(__file__).resolve().parent.parent / "pipeline"
 if str(_PIPELINE) not in sys.path:
     sys.path.insert(0, str(_PIPELINE))
 
+from dataclasses import replace  # noqa: E402
+
 from market_config import DEFAULT_CONFIG  # noqa: E402
 from market_engine import compute_market_price  # noqa: E402
+
+# Production prices projection at weight 0. The replay keeps the previous 0.09 so
+# the backtest still measures the projection premium it was written to evaluate.
+RESEARCH_PROJECTION_CONFIG = replace(DEFAULT_CONFIG, projection_weight=0.09)
 from player_aging import PlayerProfile, profile_age_on  # noqa: E402
 from projection_engine import GameStat, compute_projection  # noqa: E402
 
@@ -55,8 +61,9 @@ def simulated_market_price(
     prev_market: float | None,
 ) -> float:
     """
-    Research replay of Layer 2 with projection only (sentiment/team/demand neutral).
-    Uses production compute_market_price — does not alter production code paths.
+    Counterfactual replay of Layer 2 with a projection premium only (sentiment /
+    team / demand neutral), using production compute_market_price with
+    ``RESEARCH_PROJECTION_CONFIG``. Does not alter production code paths.
     """
     from projection_engine import ProjectionResult
 
@@ -68,7 +75,7 @@ def simulated_market_price(
         sentiment=None,
         team_context=None,
         demand=None,
-        config=DEFAULT_CONFIG,
+        config=RESEARCH_PROJECTION_CONFIG,
     )
     return float(result.market_price)
 

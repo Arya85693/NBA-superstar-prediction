@@ -1,4 +1,7 @@
 import { loadLatestQuotes } from "./marketData";
+import { loadMarketStates } from "./marketState";
+import { positionMetrics, resolveMarkPrice } from "./portfolioMath";
+import type { MarkSource } from "./portfolioMath";
 import {
   getPortfolioIdForUser,
   readPortfolio,
@@ -11,7 +14,9 @@ import type { RecentTradeRow } from "./tradeHistory";
 export type PositionRow = {
   player_id: number;
   shares: number;
+  /** Mark per share: Market Price mid, else Fair Value, else average cost. */
   price: number | null;
+  priceSource: MarkSource;
   value: number;
   name: string;
   team_abbr: string;
@@ -47,9 +52,10 @@ export async function getPortfolioSnapshot(
   authUserId: string | null,
 ): Promise<PortfolioSnapshot> {
   const portfolioId = await getPortfolioIdForUser(authUserId);
-  const [pf, quotes, realizedPnl, recentTrades] = await Promise.all([
+  const [pf, quotes, marketStates, realizedPnl, recentTrades] = await Promise.all([
     readPortfolio(portfolioId),
     loadLatestQuotes(false),
+    loadMarketStates(),
     getPortfolioRealizedPnl(portfolioId),
     getRecentTrades(portfolioId, 15),
   ]);
@@ -62,21 +68,21 @@ export async function getPortfolioSnapshot(
     if (shares <= 0) continue;
     const pid = Number(pidStr);
     const q = quotes.get(pid);
-    const price = q?.price_after_game ?? null;
-    const value = price !== null ? roundMoney(price * shares) : 0;
     const avgCostPerShare = pf.avgCostPerShare[pidStr] ?? null;
-    const costBasis =
-      avgCostPerShare !== null ? roundMoney(avgCostPerShare * shares) : null;
-    const positionUnrealized =
-      price !== null && avgCostPerShare !== null
-        ? roundMoney((price - avgCostPerShare) * shares)
-        : null;
+    const { price, source: priceSource } = resolveMarkPrice({
+      marketPrice: marketStates.get(pid)?.market_price,
+      fairValue: q?.price_after_game,
+      avgCostPerShare,
+    });
+    const { value, costBasis, unrealizedPnl: positionUnrealized } =
+      positionMetrics(price, shares, avgCostPerShare);
     if (positionUnrealized !== null) unrealizedPnl += positionUnrealized;
     positionsValue += value;
     raw.push({
       player_id: pid,
       shares,
       price,
+      priceSource,
       value,
       name: q?.player_name ?? `#${pid}`,
       team_abbr: q?.team_abbr ?? "",

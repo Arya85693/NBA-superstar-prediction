@@ -143,6 +143,9 @@ async function loadFromSupabase(): Promise<Map<number, MarketState>> {
  * Map of player_id -> current Market Price state. Cached until the market
  * revision changes. Returns an empty map (not an error) when the market layer
  * is not yet populated or in local CSV mode, so callers fall back to Fair Value.
+ * A failed read is never cached: callers get the last good map (if any) and the
+ * next request retries, so one transient error can't push trades onto Fair Value
+ * fills for a whole cycle.
  */
 export async function loadMarketStates(): Promise<Map<number, MarketState>> {
   if (!pricesFromSupabase()) return new Map();
@@ -157,10 +160,15 @@ export async function loadMarketStates(): Promise<Map<number, MarketState>> {
         const states = await loadFromSupabase();
         stateCache = { sourceKey, states };
         return states;
-      } catch {
-        const empty = new Map<number, MarketState>();
-        stateCache = { sourceKey, states: empty };
-        return empty;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        if (/does not exist|Could not find the table/i.test(message)) {
+          // Market layer not installed: cache "empty" for this revision as before.
+          const empty = new Map<number, MarketState>();
+          stateCache = { sourceKey, states: empty };
+          return empty;
+        }
+        return stateCache?.states ?? new Map<number, MarketState>();
       } finally {
         inflight = null;
       }

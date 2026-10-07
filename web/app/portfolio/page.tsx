@@ -213,7 +213,7 @@ export default async function PortfolioPage() {
 
           value={formatUsd(snap.positionsValue)}
 
-          hint={`${pct(snap.equitiesPct)} of portfolio · shares × latest price`}
+          hint={`${pct(snap.equitiesPct)} of portfolio · shares × Market Price (mid)`}
 
         />
 

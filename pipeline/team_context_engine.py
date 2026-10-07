@@ -3,10 +3,10 @@ Team context engine — captures value that comes from a player's *situation*
 rather than their box score: team success, playoff positioning, opportunity
 shifts (trades / injuries to teammates), rotation changes and schedule quality.
 
-DORMANT BY DESIGN. Returns a neutral ``0.0`` today. The lever, weighting and
-explanation hooks exist so that adding standings / depth-chart / schedule feeds
-later is purely additive — populate :class:`TeamContextInput` and return a real
-score with no caller changes.
+Live input today is ``team_win_pct`` (from ingested W/L); the other fields are
+future hooks. The score is stored and shown, but ``MarketConfig.team_context_weight``
+is 0: wins already show up in the box scores that drive Fair Value, so pricing
+team record as well would count performance twice.
 """
 from __future__ import annotations
 

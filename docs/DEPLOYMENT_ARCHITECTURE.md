@@ -128,13 +128,14 @@ sequenceDiagram
   GHA->>BDL: Fetch game logs + active roster
   BDL-->>GHA: raw_game_logs.csv
   GHA->>Py: clean → game_score → Fair Value CSV
-  GHA->>SB: truncate + insert player_game_prices
-  GHA->>SB: bump prices revision
+  GHA->>SB: truncate + insert player_game_prices (--defer-revision-bump)
   GHA->>Py: update_market_state
-  Py->>SB: read prev market + trades
+  Py->>SB: read prev market + trades (abort on read error)
   Py->>SB: upsert market state/history/ticks
-  GHA->>SB: bump market_revision
+  Py->>SB: publish_pricing_revision (revision + market_revision)
 ```
+
+`publish_pricing_revision` comes from `supabase/pricing_revision.sql` (additive; apply once). Without it the market step calls `bump_prices_revision` then `bump_market_revision`.
 
 **Deploy coupling:** Vercel deploys are **independent** of price updates. The app polls revision fields on each request (cache keys). No redeploy required after pipeline success.
 

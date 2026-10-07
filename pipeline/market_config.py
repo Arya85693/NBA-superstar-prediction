@@ -7,26 +7,46 @@ The platform has TWO pricing layers:
    basketball value of a player. Objective, updates only after games.
 
 2. **Market Price** (this package) — the actual displayed / tradable price.
-   Fair Value plus explainable premiums/discounts from projection, sentiment,
-   team context and user demand, with mean reversion, movement caps and decay.
+   An anchor (Fair Value × availability) plus bounded premiums from news
+   sentiment and user demand, with time-scaled mean reversion and movement caps.
 
 Every tunable lives here so the model is auditable in one place and can be
 re-priced without touching engine logic. Each "score" is normalised to
 ``[-1, 1]`` and each "weight" is the maximum fraction of Fair Value that lever
 may push the Market Price target.
+
+Projection and team context are still computed and stored (Radar / outlook),
+but carry weight 0 in the price: both are derived from the same box scores that
+already drive Fair Value, and the backtest shows the projection score is
+negatively related to the next Fair Value move (see docs/MARKET_PRICING_ENGINE.md).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Stored in every explanation; a change marks a methodology boundary so the first
+# cycle under a new model does not treat the restatement as a game-night event.
+PRICING_MODEL_VERSION = "2026-10-fv2-mkt2"
+
 
 @dataclass(frozen=True)
 class MarketConfig:
     # --- Lever weights: max |adjustment| as a fraction of Fair Value -----------
-    projection_weight: float = 0.09       # ±9% — forward expectations move price more
-    sentiment_weight: float = 0.04        # ±4%
-    team_context_weight: float = 0.03     # ±3%
+    projection_weight: float = 0.0        # diagnostic only (would double-count box scores)
+    sentiment_weight: float = 0.04        # ±4% — news headlines only
+    team_context_weight: float = 0.0      # diagnostic only (would double-count box scores)
     demand_weight: float = 0.05           # ±5%
+
+    # --- Availability (injury) adjustment on the Fair Value anchor -------------
+    # anchor = FV × (1 − availability_max_discount × severity), severity from the
+    # ESPN status map. 0.04 keeps the previous maximum injury impact (it used to
+    # flow through the 4% sentiment weight).
+    availability_max_discount: float = 0.04
+
+    # --- Cycle timing ----------------------------------------------------------
+    # Reversion and movement caps are defined per nominal cycle and scaled by the
+    # elapsed fraction of one (capped at 1), so re-runs cannot compound movement.
+    nominal_cycle_minutes: float = 30.0
 
     # --- Premium / movement guards (anti-manipulation) -------------------------
     # Market Price may never sit more than this fraction away from Fair Value.
@@ -64,11 +84,11 @@ class MarketConfig:
     # Cross-cycle smoothing (EMA): new sentiment = alpha*fresh + (1-alpha)*prev.
     # Lower = steadier (price won't whipsaw on one new article each cycle).
     sentiment_smoothing: float = 0.60
-    # Injury signal only applies while basketball is actually being played. If the
-    # most recent league game (or a given player's last game) is older than this
-    # many days, "Out" is treated as offseason/stale noise and ignored — so the
-    # injury lever doesn't discount ~everyone in July or eliminated players in the
-    # playoffs. News sentiment is unaffected (offseason trades/signings are real).
+    # Availability only applies while basketball is actually being played. If the
+    # most recent league game is older than this many days, injury listings are
+    # treated as offseason noise and ignored. A listed player who has not played
+    # recently keeps the discount: Fair Value carries forward while they are out,
+    # so the absence is not already priced. News sentiment is unaffected.
     injury_active_window_days: int = 10
 
     # --- Absolute price clamp (shared with Fair Value engine ceiling) ----------
@@ -84,6 +104,7 @@ class MarketConfig:
             "max_premium",
             "max_move_per_cycle",
             "event_max_move_per_cycle",
+            "availability_max_discount",
         ):
             v = getattr(self, name)
             if not (0.0 <= v <= 1.0):
@@ -104,6 +125,8 @@ class MarketConfig:
             raise ValueError("injury_active_window_days must be >= 1")
         if self.demand_user_cap_shares <= 0.0:
             raise ValueError("demand_user_cap_shares must be > 0")
+        if self.nominal_cycle_minutes <= 0.0:
+            raise ValueError("nominal_cycle_minutes must be > 0")
         if self.price_ceiling <= self.price_floor:
             raise ValueError("price_ceiling must exceed price_floor")
 
@@ -118,10 +141,45 @@ def cycle_limits(
     *,
     event_mode: bool,
 ) -> tuple[float, float]:
-    """Return (max_move_per_cycle, reversion_rate) for this update cycle."""
+    """Return (max_move_per_cycle, reversion_rate) for one full nominal cycle."""
     if event_mode:
         return config.event_max_move_per_cycle, config.event_reversion_rate
     return config.max_move_per_cycle, config.reversion_rate
+
+
+def elapsed_cycle_fraction(
+    elapsed_minutes: float | None,
+    config: MarketConfig = DEFAULT_CONFIG,
+) -> float:
+    """
+    Fraction of one nominal cycle since the last published state, in ``[0, 1]``.
+    Unknown elapsed time counts as one full cycle (the pre-existing behaviour).
+    """
+    if elapsed_minutes is None or elapsed_minutes != elapsed_minutes:
+        return 1.0
+    return max(0.0, min(1.0, float(elapsed_minutes) / config.nominal_cycle_minutes))
+
+
+def scaled_cycle_limits(
+    move_cap: float,
+    reversion: float,
+    fraction: float,
+) -> tuple[float, float, float]:
+    """
+    Scale one-cycle limits to a fraction ``f`` of a cycle so that running twice at
+    ``f = 0.5`` is equivalent to running once at ``f = 1``:
+
+    * reversion ``1 − (1 − λ)^f`` (remaining gap shrinks geometrically),
+    * up cap ``(1 + cap)^f − 1`` and down cap ``1 − (1 − cap)^f`` (caps compound).
+
+    Returns ``(max_up_pct, max_down_pct, reversion)``.
+    """
+    f = max(0.0, min(1.0, fraction))
+    return (
+        (1.0 + move_cap) ** f - 1.0,
+        1.0 - (1.0 - move_cap) ** f,
+        1.0 - (1.0 - reversion) ** f,
+    )
 
 
 def is_game_night_event(

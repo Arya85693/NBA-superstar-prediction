@@ -16,7 +16,7 @@ export type PriceRow = {
 export type MarketRow = PriceRow & {
   /**
    * Market Price change since the previous pipeline cycle (~30 min). Can differ
-   * from game performance when levers (sentiment, team context, etc.) move price.
+   * from game performance when availability, news sentiment or demand move price.
    */
   change_pct: number | null;
   /** Fair Value change vs the player's prior ingested game (basketball performance). */
@@ -74,6 +74,18 @@ export type MarketExplanation = {
     { score: number; weight: number; adjustment_pct: number }
   >;
   drivers?: string[];
+  /** Present from pricing model "2026-10-fv2-mkt2" onward. */
+  pricing_model_version?: string;
+  /** Fair Value × availability factor — what the premium is applied to. */
+  anchor_price?: number;
+  availability?: {
+    factor: number;
+    severity: number;
+    status: string | null;
+    adjustment_pct: number;
+  };
+  elapsed_cycle_fraction?: number;
+  event_mode?: boolean;
 };
 
 /**

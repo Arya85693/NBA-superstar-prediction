@@ -1,5 +1,8 @@
+import { roundMoney } from "./portfolioMath";
 import { createSupabaseServiceRoleClient } from "./supabase";
 import type { Portfolio } from "./types";
+
+export { roundMoney };
 
 export const STARTING_CASH = 100_000;
 
@@ -12,10 +15,6 @@ const DEFAULT: Portfolio = {
   positions: {},
   avgCostPerShare: {},
 };
-
-export function roundMoney(n: number): number {
-  return Math.round(n * 100) / 100;
-}
 
 function parseCash(v: unknown): number {
   if (typeof v === "number" && Number.isFinite(v)) return v;
