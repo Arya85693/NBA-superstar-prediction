@@ -1,6 +1,8 @@
 """
 Invariant checks for player_game_prices output.
-
+Every price_after_game must be a real number greater than 0 and at most 240.
+Each combination of player_id, game_id, and game_date must appear only once. 
+If either check fails, the function returns false so that file is not published.
 Run after price_engine: ``python pipeline/validate_prices.py`` from the repo root.
 """
 from __future__ import annotations
@@ -68,4 +70,4 @@ def run_validation(
 if __name__ == "__main__":
     ok = run_validation()
     sys.exit(0 if ok else 1)
-
+
