@@ -41,3 +41,6 @@ research/reports/**
 !research/reports/EXECUTIVE_SUMMARY.md
 !research/reports/full_historical_2018_2026/
 !research/reports/full_historical_2018_2026/**
+
+# Supabase CLI local state (project link, CLI version)
+supabase/.temp/

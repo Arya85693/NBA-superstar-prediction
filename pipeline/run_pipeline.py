@@ -85,6 +85,8 @@ def main() -> None:
     )
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
+    # Written by the ESPN fetch; absent means "reload everything" to the sync step.
+    (root / "data" / "sync_window.json").unlink(missing_ok=True)
 
     if args.espn_refetch_from and not args.fetch_espn:
         parser.error("--espn-refetch-from requires --fetch-espn.")

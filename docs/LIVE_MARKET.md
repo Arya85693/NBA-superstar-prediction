@@ -4,7 +4,7 @@ Market Price used to move only when the 30-minute pipeline ran. It now moves on 
 
 | What | Where | How often | Does |
 |---|---|---|---|
-| Full pipeline | GitHub Actions (`update-market-prices.yml`) | every 15 min | ESPN final box scores → Fair Value rebuild → news, injuries, demand → Market Price step → exports `player_fv_state` |
+| Full pipeline | GitHub Actions (`update-market-prices.yml`), started by Supabase `pg_cron` | every 15 min | ESPN final box scores → Fair Value rebuild → news, injuries, demand → Market Price step → exports `player_fv_state` |
 | Market tick | Supabase Edge Function `market-tick` via `pg_cron` | every 5 min | ESPN live box scores → provisional in-game Fair Value → steps every active player's Market Price toward its target |
 | Browser | `LiveMarketRefresher` | every 30 s | polls `/api/market/revision`; re-renders when `market_revision` changes |
 
@@ -31,6 +31,21 @@ Market Price used to move only when the 30-minute pipeline ran. It now moves on 
 - **One writer at a time.**
   - The Python step holds a lease (`acquire_market_lease`) from reading the previous state until publishing.
   - `apply_market_tick()` refuses to write while the lease is held. It also only updates rows whose `updated_at` hasn't changed since the tick read them.
+
+## The 15-minute pipeline trigger
+
+GitHub's `schedule:` trigger is best-effort, and in practice it fired only every 7–8 hours. So
+Supabase starts the workflow instead: `supabase/pipeline_dispatch.sql` schedules a `pg_cron` job at
+:02/:17/:32/:47 that calls GitHub's `workflow_dispatch` API with a fine-grained token stored in
+Vault (`github_dispatch_token`; Actions read/write on this repo only). The workflow keeps an hourly
+`schedule:` as a backup. A dispatch that answers **204** worked; **401/403** means the token expired
+or lacks the Actions permission (rotate it with `vault.update_secret`, see the SQL file).
+
+Each run syncs prices **incrementally**: the ESPN fetch writes `data/sync_window.json` and
+`sync_prices_to_supabase.py` upserts only the last 7+ days, then deletes rows that were replaced.
+That's about 1–2k rows instead of ~210k, and the site never sees an empty table. Repairs,
+cold starts and row-count mismatches fall back to the full truncate-and-reload; force one with
+`python pipeline/sync_prices_to_supabase.py --full`.
 
 ## One-time setup
 

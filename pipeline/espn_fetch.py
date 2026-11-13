@@ -764,6 +764,25 @@ def _force_full_fetch() -> bool:
     return (os.environ.get("PIPELINE_FULL_FETCH") or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+SYNC_WINDOW_JSON = DATA_DIR / "sync_window.json"
+
+
+def write_sync_window(path: Path, *, full: bool, since: date | None, reason: str) -> None:
+    """
+    Tell sync_prices_to_supabase.py which rows this run could have changed.
+
+    ``full`` (cold start, forced full fetch, ``--espn-refetch-from`` repair): the
+    whole table must be reloaded. Otherwise only rows with ``game_date >= since``
+    can differ from the last sync: the price engine walks forward in time, so new
+    or replaced games never change Fair Value for earlier games.
+    """
+    payload = {"mode": "full" if full or since is None else "incremental", "reason": reason}
+    if payload["mode"] == "incremental":
+        payload["since"] = since.isoformat()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
 def _refetch_from_env() -> date | None:
     """``ESPN_REFETCH_FROM=YYYY-MM-DD`` (empty/unset = normal incremental run)."""
     raw = (os.environ.get("ESPN_REFETCH_FROM") or "").strip()
@@ -834,6 +853,7 @@ def refresh_raw_game_logs(
     existing = pd.DataFrame() if full else cached
 
     days: list[date] = []
+    sync_full_reason: str | None = "full fetch" if existing.empty else None
     if existing.empty:
         print("ESPN: full fetch (no cache or forced).")
         for y in range(start_year, end_year + 1):
@@ -843,10 +863,12 @@ def refresh_raw_game_logs(
         if start_year != end_year and not _season_has_rows(existing, prior):
             print(f"ESPN: prior season {prior} missing from cache — full fetch of that season.")
             days.extend(season_dates(start_year, today))
+            sync_full_reason = "prior season fetched in full"
         refetch_from = refetch_from or _refetch_from_env()
         if refetch_from:
             print(f"ESPN: re-fetching every final from {refetch_from} to {today} (replacing stored rows).")
             days.extend(date_range(refetch_from, today))
+            sync_full_reason = f"re-fetch from {refetch_from}"
         anchor = _max_game_date(existing, current)
         if anchor:
             first = anchor - timedelta(days=1)
@@ -855,6 +877,7 @@ def refresh_raw_game_logs(
         else:
             print(f"ESPN: no {current} rows in cache — full fetch of the current season.")
             days.extend(season_dates(end_year, today))
+            sync_full_reason = "current season fetched in full"
     days = sorted(set(days))
 
     incoming = collect_dates(days)
@@ -874,6 +897,13 @@ def refresh_raw_game_logs(
     except ValueError:
         shown = out
     print(f"ESPN: +{len(incoming)} final rows; merged cache -> {len(merged)} rows at {shown}")
+    if out == RAW_GAME_LOGS_CSV:
+        write_sync_window(
+            SYNC_WINDOW_JSON,
+            full=sync_full_reason is not None,
+            since=min(days) if days else None,
+            reason=sync_full_reason or "incremental fetch",
+        )
     return merged
 
 

@@ -12,6 +12,14 @@ Run from repo root after the pipeline has produced CSVs:
 ``--defer-revision-bump`` skips ``bump_prices_revision`` so the market step can
 publish the Fair Value and Market Price revisions together (CI does this).
 
+Incremental by default when the ESPN fetch left ``data/sync_window.json``: only
+rows with ``game_date >= since`` (widened to at least the last
+``MIN_WINDOW_DAYS`` days) are upserted, then stale rows inside that window are
+deleted, so the site never sees an empty or half-loaded table. Falls back to the
+full truncate-and-reload when the marker is missing or says ``full``, when
+``--full`` is passed, or when the row count before the window differs between
+Supabase and the local file (an earlier sync didn't finish).
+
 Apply supabase/prices_tables.sql in the Supabase SQL Editor once before the first sync.
 """
 
@@ -19,9 +27,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -35,9 +45,14 @@ if str(_PIPELINE_DIR) not in sys.path:
 from ticker_assign import assign_player_tickers  # noqa: E402
 PRICES_CSV = REPO_ROOT / "data" / "player_game_prices.csv"
 ACTIVE_CSV = REPO_ROOT / "data" / "active_players.csv"
+SYNC_WINDOW_JSON = REPO_ROOT / "data" / "sync_window.json"
 
 BATCH = 1000
 RETRY_ATTEMPTS = 5
+# Incremental syncs always re-send at least this many recent days (cheap: a few
+# thousand rows) so a missed run or ESPN stat correction is healed automatically.
+MIN_WINDOW_DAYS = 7
+PRICE_PK = ("player_id", "game_id", "game_date")
 
 
 def _execute(request, what: str):
@@ -158,12 +173,107 @@ def _insert_price_batches(client, rows: list[dict]) -> int:
     return total
 
 
+def load_sync_window(path: Path, today: date | None = None) -> tuple[str | None, str]:
+    """
+    (since ISO date, reason) for an incremental sync, or (None, reason) for a full one.
+    ``since`` is widened to at least ``MIN_WINDOW_DAYS`` before ``today``.
+    """
+    if not path.is_file():
+        return None, "no sync window from the fetch step"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return None, f"unreadable sync window ({exc})"
+    if payload.get("mode") != "incremental":
+        return None, str(payload.get("reason") or "fetch requested a full reload")
+    try:
+        since = date.fromisoformat(str(payload["since"]))
+    except (KeyError, ValueError):
+        return None, "sync window without a valid 'since'"
+    floor = (today or datetime.now(timezone.utc).date()) - timedelta(days=MIN_WINDOW_DAYS)
+    return min(since, floor).isoformat(), str(payload.get("reason") or "incremental fetch")
+
+
+def plan_incremental(
+    price_rows: list[dict],
+    remote_keys: set[tuple[int, str, str]],
+    since: str,
+) -> tuple[list[dict], set[tuple[int, str, str]]]:
+    """Rows to upsert (game_date >= since) and remote keys in that window to delete."""
+    window = [r for r in price_rows if r["game_date"] >= since]
+    local_keys = {(r["player_id"], r["game_id"], r["game_date"]) for r in window}
+    stale = {k for k in remote_keys if k[2] >= since and k not in local_keys}
+    return window, stale
+
+
+def _remote_count_before(client, since: str) -> int:
+    resp = _execute(
+        client.table("player_game_prices")
+        .select("player_id", count="exact")
+        .lt("game_date", since)
+        .limit(1),
+        "count rows before window",
+    )
+    return int(resp.count or 0)
+
+
+def _remote_window_keys(client, since: str) -> set[tuple[int, str, str]]:
+    keys: set[tuple[int, str, str]] = set()
+    start = 0
+    while True:
+        resp = _execute(
+            client.table("player_game_prices")
+            .select("player_id,game_id,game_date")
+            .gte("game_date", since)
+            .order("player_id")
+            .order("game_date")
+            .order("game_id")
+            .range(start, start + BATCH - 1),
+            "read window keys",
+        )
+        data = resp.data or []
+        for r in data:
+            keys.add((int(r["player_id"]), str(r["game_id"]), str(r["game_date"])[:10]))
+        if len(data) < BATCH:
+            return keys
+        start += BATCH
+
+
+def _delete_price_keys(client, keys: set[tuple[int, str, str]]) -> None:
+    for pid, gid, gdate in sorted(keys):
+        _execute(
+            client.table("player_game_prices")
+            .delete()
+            .eq("player_id", pid)
+            .eq("game_id", gid)
+            .eq("game_date", gdate),
+            f"delete stale row {pid}/{gid}/{gdate}",
+        )
+
+
+def _prune_table(client, table: str, keep_ids: set[int]) -> int:
+    """Delete rows whose player_id is not in ``keep_ids`` (after the new rows are in)."""
+    resp = _execute(client.table(table).select("player_id").limit(10000), f"read {table} ids")
+    extra = sorted({int(r["player_id"]) for r in (resp.data or [])} - keep_ids)
+    for i in range(0, len(extra), 200):
+        _execute(
+            client.table(table).delete().in_("player_id", extra[i : i + 200]),
+            f"prune {table}",
+        )
+    return len(extra)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     parser.add_argument(
         "--defer-revision-bump",
         action="store_true",
         help="Leave prices_snapshot_meta.revision for update_market_state.py to publish.",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Truncate and reload every table even when an incremental window is available.",
     )
     args = parser.parse_args()
 
@@ -244,16 +354,35 @@ def main() -> None:
 
     client = create_client(url, key)
 
-    print("Truncating remote price tables…")
-    _execute(client.rpc("truncate_prices_for_reload", {}), "truncate")
-
     if skipped_dupes or skipped_invalid:
         print(
             f"  skipped {skipped_dupes} duplicate PK rows, "
             f"{skipped_invalid} invalid game_id/date rows"
         )
-    total = _insert_price_batches(client, price_rows)
-    print(f"  upserted {total} price rows (final).")
+
+    since, reason = (None, "--full") if args.full else load_sync_window(SYNC_WINDOW_JSON)
+    if since is not None:
+        local_before = sum(1 for r in price_rows if r["game_date"] < since)
+        remote_before = _remote_count_before(client, since)
+        if remote_before != local_before:
+            print(
+                f"Rows before {since} differ (Supabase {remote_before}, local {local_before}); "
+                "doing a full reload.",
+            )
+            since, reason = None, "row count mismatch before the window"
+
+    incremental = since is not None
+    if incremental:
+        print(f"Incremental sync from {since} ({reason}).")
+        window_rows, stale = plan_incremental(price_rows, _remote_window_keys(client, since), since)
+        total = _insert_price_batches(client, window_rows)
+        _delete_price_keys(client, stale)
+        print(f"  upserted {total} price rows, removed {len(stale)} stale rows (final).")
+    else:
+        print(f"Full reload ({reason}). Truncating remote price tables…")
+        _execute(client.rpc("truncate_prices_for_reload", {}), "truncate")
+        total = _insert_price_batches(client, price_rows)
+        print(f"  upserted {total} price rows (final).")
 
     active_batch: list[dict] = []
     for pid in active_ids_ordered:
@@ -269,6 +398,10 @@ def main() -> None:
             client.table("active_players").upsert(active_batch, on_conflict="player_id"),
             "active_players",
         )
+    if incremental:
+        pruned = _prune_table(client, "active_players", active_set)
+        if pruned:
+            print(f"  active_players: removed {pruned} players no longer active.")
 
     print("Computing max_dataset_season + played_player_ids + player_board …")
 
@@ -360,6 +493,8 @@ def main() -> None:
             client.table("player_board").upsert(board_batch, on_conflict="player_id"),
             "player_board",
         )
+    if incremental:
+        _prune_table(client, "player_board", set(tick_map))
     print(f"  player_board: {len(tick_map)} tickers.")
 
     if args.defer_revision_bump:

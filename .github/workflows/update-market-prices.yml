@@ -7,10 +7,11 @@ on:
         description: "Leave BLANK for a normal run. Only to repair data: a date like 2026-04-12 re-downloads every final since then."
         required: false
         default: ""
+  # Primary trigger: Supabase pg_cron calls workflow_dispatch every 15 minutes
+  # (supabase/pipeline_dispatch.sql), because GitHub's scheduler is best-effort and in
+  # practice fired only every ~7-8 hours. This hourly schedule is just a backup.
   schedule:
-    # Every 15 minutes at :07/:22/:37/:52 UTC (avoids :00 UTC, where GitHub warns load can delay/drop schedules).
-    # Omit `timezone:` so older GitHub versions still accept the workflow; see events docs for timezone-aware cron.
-    - cron: "7,22,37,52 * * * *"
+    - cron: "37 * * * *"
 
 permissions:
   contents: read
