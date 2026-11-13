@@ -157,7 +157,7 @@ export function PriceChart({
           />
           <XAxis
             dataKey="date"
-            tick={chartTypography.tick}
+            tick={{ ...chartTypography.tick, fill: chartColors.tick }}
             tickLine={false}
             axisLine={{ stroke: chartColors.axis, strokeWidth: 1 }}
             tickFormatter={formatAxisDate}
@@ -167,7 +167,7 @@ export function PriceChart({
           />
           <YAxis
             domain={["auto", "auto"]}
-            tick={chartTypography.tickMono}
+            tick={{ ...chartTypography.tickMono, fill: chartColors.tick }}
             tickLine={false}
             axisLine={false}
             width={yAxisWidth}

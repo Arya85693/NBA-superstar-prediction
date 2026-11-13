@@ -56,6 +56,9 @@ class _Query:
     def eq(self, *_a, **_k):
         return self
 
+    def gte(self, *_a, **_k):
+        return self
+
     def upsert(self, rows, on_conflict=None):
         self.op, self.payload = "upsert", rows
         return self
@@ -97,7 +100,8 @@ class _Rpc:
         if err:
             raise err
         self.client.rpcs.append(self.name)
-        return _Resp(None)
+        # Like supabase/live_market.sql: the lease is free, so acquiring returns true.
+        return _Resp(True if self.name == "acquire_market_lease" else None)
 
 
 class FakeClient:
@@ -307,11 +311,15 @@ def _run(env, players, last_game=None):
     return _state(env)
 
 
+LEASED_PUBLISH = ["acquire_market_lease", "publish_pricing_revision", "release_market_lease"]
+
+
 def test_pipeline_publishes_once_after_all_writes(env):
     _run(env, {1: [100.0], 2: [120.0]})
-    assert env.rpcs == ["publish_pricing_revision"]
+    # The lease spans the whole read-compute-write cycle and is always released.
+    assert env.rpcs == LEASED_PUBLISH
     assert [w[1] for w in env.writes] == [
-        "player_market_state", "player_market_history", "player_market_ticks",
+        "player_fv_state", "player_market_state", "player_market_history", "player_market_ticks",
     ]
 
 
@@ -319,14 +327,15 @@ def test_pipeline_aborts_without_writes_when_state_read_fails(env):
     env.read_errors["player_market_state"] = Exception("upstream timeout")
     with pytest.raises(SystemExit):
         _run(env, {1: [100.0]})
-    assert env.writes == [] and env.rpcs == []
+    # No writes, nothing published, and the lease is released on the way out.
+    assert env.writes == [] and env.rpcs == ["acquire_market_lease", "release_market_lease"]
 
 
 def test_pipeline_aborts_without_writes_when_trades_read_fails(env):
     env.read_errors["trades"] = Exception("upstream timeout")
     with pytest.raises(SystemExit):
         _run(env, {1: [100.0]})
-    assert env.writes == [] and env.rpcs == []
+    assert env.writes == [] and env.rpcs == ["acquire_market_lease", "release_market_lease"]
 
 
 def test_pipeline_first_run_with_missing_tables_cold_starts(env):
@@ -531,7 +540,7 @@ def test_s20_action_running_twice_appends_ticks_never_deletes(env):
 def test_s21_readers_see_one_revision_pair_per_cycle(env):
     # Both cache keys move together, once, after every row has been written.
     _run(env, {1: [100.0], 2: [110.0]})
-    assert env.rpcs == ["publish_pricing_revision"]
+    assert env.rpcs == LEASED_PUBLISH
     assert env.writes[-1][1] == "player_market_ticks"
 
 

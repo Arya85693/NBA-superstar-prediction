@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatUsdNumberOnly } from "@/lib/format";
 import { CHANGE_VS_PRIOR_GAME_TOOLTIP, PREMIUM_VS_FAIR_TOOLTIP } from "@/lib/marketRefresh";
 import type { MarketMeta, MarketRow } from "@/lib/types";
+import { useValueFlash } from "@/lib/useValueFlash";
 
 function fmtPct(n: number | null) {
   if (n === null || Number.isNaN(n)) return "-";
@@ -128,6 +129,7 @@ function RowPrice({
   align?: "start" | "end";
 }) {
   const num = formatUsdNumberOnly(r.price_after_game);
+  const flash = useValueFlash(r.price_after_game);
   const end = align === "end";
   const caution = r.caution_no_play_current_season;
   return (
@@ -139,7 +141,10 @@ function RowPrice({
         Warning stays in its own column so ⚠️ never shifts this cluster.
       */}
       <div className="flex w-[10.5rem] shrink-0 items-center justify-end font-mono text-sm tabular-nums leading-none">
-        <span className="inline-flex items-baseline gap-1 whitespace-nowrap">
+        <span
+          key={flash.key}
+          className={`inline-flex items-baseline gap-1 whitespace-nowrap ${flash.className}`.trim()}
+        >
           <span className="text-muted">$</span>
           <span className="text-foreground">{num}</span>
         </span>

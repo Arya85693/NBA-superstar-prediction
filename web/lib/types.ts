@@ -15,7 +15,7 @@ export type PriceRow = {
 
 export type MarketRow = PriceRow & {
   /**
-   * Market Price change since the previous pipeline cycle (~30 min). Can differ
+   * Market Price change since the previous full pipeline cycle (~15 min). Can differ
    * from game performance when availability, news sentiment or demand move price.
    */
   change_pct: number | null;

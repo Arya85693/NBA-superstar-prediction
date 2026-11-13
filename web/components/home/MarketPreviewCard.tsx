@@ -28,7 +28,7 @@ export function MarketPreviewCard({
   return (
     <div className="hs-hero-market-card relative overflow-hidden">
       <div
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgb(44_40_37/0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgb(44_40_37/0.04)_1px,transparent_1px)] bg-size-[1.25rem_1.25rem]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--grid-line)_1px,transparent_1px),linear-gradient(to_bottom,var(--grid-line)_1px,transparent_1px)] bg-size-[1.25rem_1.25rem]"
         aria-hidden
       />
       <div className="relative">

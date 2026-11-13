@@ -3,7 +3,7 @@ import { formatRelativeUpdated } from "./marketAnalytics";
 import type { MarketMeta } from "./types";
 
 /** Documented automated ingestion cadence - shown in UI when pipeline runs on schedule. */
-export const REFRESH_CADENCE_LABEL = "~30 min";
+export const REFRESH_CADENCE_LABEL = "~5 min";
 
 export const BOARD_TOTAL_TOOLTIP =
   "Aggregate sum of latest model prices across tracked players. Not a real market capitalization metric.";
@@ -12,7 +12,7 @@ export const CHANGE_VS_PRIOR_GAME_TOOLTIP =
   "Fair Value change vs the player's prior ingested game — reflects recent on-court production (updates after games).";
 
 export const MARKET_CYCLE_CHANGE_TOOLTIP =
-  "Market Price change since the previous pipeline cycle (~30 min). Can move from sentiment, team context, and mean reversion even when Fair Value is flat.";
+  "Market Price change since the previous full pipeline cycle (~15 min). Price ticks every ~5 min — live during games — and can move from news sentiment, demand and mean reversion even when Fair Value is flat.";
 
 export const PREMIUM_VS_FAIR_TOOLTIP =
   "Premium or discount: how far Market Price (tradable) sits above or below Fair Value (statistical baseline from game stats).";

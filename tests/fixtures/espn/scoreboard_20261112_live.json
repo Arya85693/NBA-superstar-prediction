@@ -1,0 +1,220 @@
+{
+ "leagues": [
+  {
+   "season": {
+    "year": 2027,
+    "startDate": "2026-09-30T07:00Z",
+    "endDate": "2027-06-26T06:59Z",
+    "displayName": "2026-27",
+    "type": {
+     "id": "2",
+     "type": 2,
+     "name": "Regular Season",
+     "abbreviation": "reg"
+    }
+   }
+  }
+ ],
+ "events": [
+  {
+   "id": "401909976",
+   "date": "2026-11-13T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909976",
+     "date": "2026-11-13T00:00Z",
+     "status": {
+      "type": {
+       "id": "23",
+       "name": "STATUS_HALFTIME",
+       "state": "in",
+       "completed": false,
+       "description": "Halftime"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "20",
+       "homeAway": "home",
+       "score": "60",
+       "team": {
+        "id": "20",
+        "abbreviation": "PHI",
+        "displayName": "Philadelphia 76ers"
+       }
+      },
+      {
+       "id": "28",
+       "homeAway": "away",
+       "score": "60",
+       "team": {
+        "id": "28",
+        "abbreviation": "TOR",
+        "displayName": "Toronto Raptors"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909977",
+   "date": "2026-11-13T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909977",
+     "date": "2026-11-13T00:00Z",
+     "status": {
+      "type": {
+       "id": "23",
+       "name": "STATUS_HALFTIME",
+       "state": "in",
+       "completed": false,
+       "description": "Halftime"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "27",
+       "homeAway": "home",
+       "score": "61",
+       "team": {
+        "id": "27",
+        "abbreviation": "WSH",
+        "displayName": "Washington Wizards"
+       }
+      },
+      {
+       "id": "8",
+       "homeAway": "away",
+       "score": "64",
+       "team": {
+        "id": "8",
+        "abbreviation": "DET",
+        "displayName": "Detroit Pistons"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909978",
+   "date": "2026-11-13T01:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909978",
+     "date": "2026-11-13T01:00Z",
+     "status": {
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "16",
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "id": "16",
+        "abbreviation": "MIN",
+        "displayName": "Minnesota Timberwolves"
+       }
+      },
+      {
+       "id": "6",
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "6",
+        "abbreviation": "DAL",
+        "displayName": "Dallas Mavericks"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909979",
+   "date": "2026-11-13T02:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909979",
+     "date": "2026-11-13T02:00Z",
+     "status": {
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "21",
+       "homeAway": "home",
+       "score": "0",
+       "team": {
+        "id": "21",
+        "abbreviation": "PHX",
+        "displayName": "Phoenix Suns"
+       }
+      },
+      {
+       "id": "30",
+       "homeAway": "away",
+       "score": "0",
+       "team": {
+        "id": "30",
+        "abbreviation": "CHA",
+        "displayName": "Charlotte Hornets"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

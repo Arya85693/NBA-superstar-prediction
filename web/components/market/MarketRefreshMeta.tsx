@@ -102,7 +102,7 @@ function RefreshBar({
         <span className="font-medium text-foreground">{REFRESH_CADENCE_LABEL}</span>
       </span>
       <span className="min-w-[12rem] flex-1 basis-full text-muted sm:basis-auto">
-        Automated repricing from ingested game data - rolling snapshot, not tick-by-tick.
+        Market Price ticks every ~5 min and moves live during games.
       </span>
       {showSimulationNote ? (
         <span className="basis-full border-t border-border/60 pt-2 text-[11px] text-muted sm:border-t-0 sm:pt-0">

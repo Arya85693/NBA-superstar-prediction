@@ -1,0 +1,225 @@
+{
+ "team": {
+  "id": "9",
+  "abbreviation": "GS",
+  "displayName": "Golden State Warriors"
+ },
+ "athletes": [
+  {
+   "id": "4397886",
+   "displayName": "Charles Bassey",
+   "fullName": "Charles Bassey",
+   "dateOfBirth": "2000-10-28T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "6430",
+   "displayName": "Jimmy Butler III",
+   "fullName": "Jimmy Butler III",
+   "dateOfBirth": "1989-09-14T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4433149",
+   "displayName": "LJ Cryer",
+   "fullName": "LJ Cryer",
+   "dateOfBirth": "2001-10-09T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "3975",
+   "displayName": "Stephen Curry",
+   "fullName": "Stephen Curry",
+   "dateOfBirth": "1988-03-14T08:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "6589",
+   "displayName": "Draymond Green",
+   "fullName": "Draymond Green",
+   "dateOfBirth": "1990-03-04T08:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "3213",
+   "displayName": "Al Horford",
+   "fullName": "Al Horford",
+   "dateOfBirth": "1986-06-03T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4703396",
+   "displayName": "Graham Ike",
+   "fullName": "Graham Ike",
+   "dateOfBirth": "2002-08-03T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "5175737",
+   "displayName": "Yaxel Lendeborg",
+   "fullName": "Yaxel Lendeborg",
+   "dateOfBirth": "2002-09-30T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4897449",
+   "displayName": "Malevy Leons",
+   "fullName": "Malevy Leons",
+   "dateOfBirth": "1999-09-23T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4066436",
+   "displayName": "De'Anthony Melton",
+   "fullName": "De'Anthony Melton",
+   "dateOfBirth": "1998-05-28T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4432171",
+   "displayName": "Moses Moody",
+   "fullName": "Moses Moody",
+   "dateOfBirth": "2002-05-31T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "2990969",
+   "displayName": "Georges Niang",
+   "fullName": "Georges Niang",
+   "dateOfBirth": "1993-06-17T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "3134903",
+   "displayName": "Gary Payton II",
+   "fullName": "Gary Payton II",
+   "dateOfBirth": "1992-12-01T08:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4709138",
+   "displayName": "Brandin Podziemski",
+   "fullName": "Brandin Podziemski",
+   "dateOfBirth": "2003-02-25T08:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "3102531",
+   "displayName": "Kristaps Porzingis",
+   "fullName": "Kristaps Porzingis",
+   "dateOfBirth": "1995-08-02T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4897262",
+   "displayName": "Will Richard",
+   "fullName": "Will Richard",
+   "dateOfBirth": "2002-12-24T08:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4997536",
+   "displayName": "Gui Santos",
+   "fullName": "Gui Santos",
+   "dateOfBirth": "2002-06-22T07:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  },
+  {
+   "id": "4397040",
+   "displayName": "Brandon Williams",
+   "fullName": "Brandon Williams",
+   "dateOfBirth": "1999-11-22T08:00Z",
+   "status": {
+    "id": "1",
+    "name": "Active",
+    "type": "active",
+    "abbreviation": "Active"
+   }
+  }
+ ]
+}

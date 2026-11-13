@@ -36,7 +36,7 @@ export default async function MarketPage() {
       <PageHeader
         eyebrow="Rolling market snapshot"
         title="Player market"
-        description="Search and sort the board. Each row shows model price (2 decimals), team, last ingested game, and change vs that player's prior game row. Quotes refresh automatically on each ingestion cycle (~30 min) when new regular-season or playoff games arrive. Click a row or Open for charts and paper trading."
+        description="Search and sort the board. Each row shows model price (2 decimals), team, last ingested game, and change vs that player's prior game row. Market Prices tick every ~5 minutes and move live during games; this page updates on its own. Click a row or Open for charts and paper trading."
         marketMeta={meta}
       />
       <div className="mb-8">

@@ -8,6 +8,7 @@ import { formatUsd } from "@/lib/format";
 import { loginHref, signupHref } from "@/lib/authRedirect";
 import { maxWholeSharesAtPrice, usePortfolioCash } from "@/hooks/usePortfolioCash";
 import { buyPrice, sellPrice, roundTripSpreadPct } from "@/lib/tradeCosts";
+import { useValueFlash } from "@/lib/useValueFlash";
 
 type Props = {
   playerId: number;
@@ -27,6 +28,7 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
   const [shares, setShares] = useState("1");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const priceFlash = useValueFlash(price);
 
   useEffect(() => {
     let alive = true;
@@ -98,7 +100,7 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
         Fills execute around the live Market Price with a {roundTripSpreadPct()}% bid/ask spread —
         buys fill just above the mid, sells just below. Market Price tracks Fair Value,
         adjusted for injury availability plus small news-sentiment and user-demand premiums,
-        and refreshes each ingestion cycle (~30 min) — even between games.
+        and ticks every ~5 min — live during games, and even between games.
       </p>
       <h3 className="hs-label mb-4">
         Paper trade - {playerName}
@@ -109,11 +111,13 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
         )}
       </h3>
       <p className="hs-stat-value mb-1 text-2xl text-foreground">
-        {formatUsd(price)}
+        <span key={priceFlash.key} className={priceFlash.className}>
+          {formatUsd(price)}
+        </span>
         <span className="ml-2 text-sm font-sans font-normal text-muted">/ sh mid</span>
       </p>
       <p className="mb-3 text-xs text-muted">
-        Buy <span className="font-mono text-success">{formatUsd(ask)}</span> · Sell{" "}
+        Buy <span className="font-mono text-positive">{formatUsd(ask)}</span> · Sell{" "}
         <span className="font-mono text-warning">{formatUsd(bid)}</span> / sh
       </p>
 
@@ -127,7 +131,7 @@ export function TradePanel({ playerId, playerName, price, ticker }: Props) {
             Sign in to paper trade with your own $100k wallet. Browsing prices and charts is
             free — no account needed.
           </p>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Link href={loginHref(returnPath)} className="hs-btn hs-btn-primary flex-1 text-center">
               Sign in to trade
             </Link>

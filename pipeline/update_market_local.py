@@ -1,10 +1,13 @@
 """
 Run the lighter long-term market updater locally (matches CI / production fetch).
 
-Default: BALLDONTLIE (`run_pipeline.py --fetch-balldontlie --active`), then sync to Supabase.
-Loads `web/.env.local` when present (Supabase + `BALLDONTLIE_API_KEY`).
+Default: ESPN (`run_pipeline.py --fetch-espn --active`), then sync to Supabase.
+Loads `web/.env.local` when present (Supabase keys; `BALLDONTLIE_API_KEY` only for the fallback).
 
-Legacy fallback only: set `PRICES_FETCH_SOURCE=nba_api` to use `--fetch` (stats.nba.com via nba_api).
+`PRICES_FETCH_SOURCE` picks the fetch:
+  espn (default)  ESPN box scores + rosters, no key (`--fetch-espn --active`)
+  balldontlie     deprecated fallback, needs `BALLDONTLIE_API_KEY` (`--fetch-balldontlie --active`)
+  nba_api         legacy stats.nba.com fallback (`--fetch --active`)
 """
 from __future__ import annotations
 
@@ -32,18 +35,24 @@ def load_env_file(path: Path) -> None:
 
 
 def _fetch_args(env: dict[str, str]) -> list[str]:
-    source = (env.get("PRICES_FETCH_SOURCE") or "balldontlie").strip().lower()
+    source = (env.get("PRICES_FETCH_SOURCE") or "espn").strip().lower()
     if source in ("nba_api", "nba", "stats", "stats.nba.com"):
         print(
             "PRICES_FETCH_SOURCE=nba_api — using deprecated stats.nba.com fetch (--fetch).",
             file=sys.stderr,
         )
         return ["--fetch", "--active"]
-    if source not in ("balldontlie", "bdl", "balldontlie.io", ""):
-        print(
-            f"Unknown PRICES_FETCH_SOURCE={source!r}; defaulting to BALLDONTLIE.",
-            file=sys.stderr,
-        )
+    if source not in ("balldontlie", "bdl", "balldontlie.io"):
+        if source not in ("espn", ""):
+            print(
+                f"Unknown PRICES_FETCH_SOURCE={source!r}; defaulting to ESPN.",
+                file=sys.stderr,
+            )
+        return ["--fetch-espn", "--active"]
+    print(
+        "PRICES_FETCH_SOURCE=balldontlie — using the deprecated BALLDONTLIE fallback.",
+        file=sys.stderr,
+    )
     if not (env.get("BALLDONTLIE_API_KEY") or "").strip():
         print(
             "Warning: BALLDONTLIE_API_KEY is not set. Add it to web/.env.local or the environment.",

@@ -22,8 +22,8 @@ export function MarketBriefCard({
       </p>
       <p className="mt-3 text-[15px] leading-relaxed text-foreground">{brief}</p>
       <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        Automated repricing engine - quotes move when new games enter the dataset, not
-        tick-by-tick.
+        Automated repricing engine - Market Prices tick every ~5 min and move with live box
+        scores during games.
       </p>
       <MarketRefreshMeta meta={meta} variant="compact" className="mt-4" />
     </section>

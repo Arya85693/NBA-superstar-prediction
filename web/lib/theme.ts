@@ -17,7 +17,7 @@ export function readStoredTheme(): Theme | null {
 }
 
 export function resolveTheme(stored: Theme | null): Theme {
-  return stored ?? "light";
+  return stored ?? "dark";
 }
 
 export function applyTheme(theme: Theme) {
