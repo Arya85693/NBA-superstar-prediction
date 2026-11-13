@@ -1,0 +1,540 @@
+{
+ "leagues": [
+  {
+   "season": {
+    "year": 2027,
+    "startDate": "2026-09-30T07:00Z",
+    "endDate": "2027-06-26T06:59Z",
+    "displayName": "2026-27",
+    "type": {
+     "id": "2",
+     "type": 2,
+     "name": "Regular Season",
+     "abbreviation": "reg"
+    }
+   }
+  }
+ ],
+ "events": [
+  {
+   "id": "401909966",
+   "date": "2026-11-12T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909966",
+     "date": "2026-11-12T00:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "11",
+       "homeAway": "home",
+       "winner": true,
+       "score": "114",
+       "team": {
+        "id": "11",
+        "abbreviation": "IND",
+        "displayName": "Indiana Pacers"
+       }
+      },
+      {
+       "id": "27",
+       "homeAway": "away",
+       "winner": false,
+       "score": "101",
+       "team": {
+        "id": "27",
+        "abbreviation": "WSH",
+        "displayName": "Washington Wizards"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909967",
+   "date": "2026-11-12T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909967",
+     "date": "2026-11-12T00:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "18",
+       "homeAway": "home",
+       "winner": false,
+       "score": "107",
+       "team": {
+        "id": "18",
+        "abbreviation": "NY",
+        "displayName": "New York Knicks"
+       }
+      },
+      {
+       "id": "5",
+       "homeAway": "away",
+       "winner": true,
+       "score": "115",
+       "team": {
+        "id": "5",
+        "abbreviation": "CLE",
+        "displayName": "Cleveland Cavaliers"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909968",
+   "date": "2026-11-12T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909968",
+     "date": "2026-11-12T00:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "28",
+       "homeAway": "home",
+       "winner": false,
+       "score": "93",
+       "team": {
+        "id": "28",
+        "abbreviation": "TOR",
+        "displayName": "Toronto Raptors"
+       }
+      },
+      {
+       "id": "2",
+       "homeAway": "away",
+       "winner": true,
+       "score": "98",
+       "team": {
+        "id": "2",
+        "abbreviation": "BOS",
+        "displayName": "Boston Celtics"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909969",
+   "date": "2026-11-12T01:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909969",
+     "date": "2026-11-12T01:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "4",
+       "homeAway": "home",
+       "winner": false,
+       "score": "119",
+       "team": {
+        "id": "4",
+        "abbreviation": "CHI",
+        "displayName": "Chicago Bulls"
+       }
+      },
+      {
+       "id": "24",
+       "homeAway": "away",
+       "winner": true,
+       "score": "124",
+       "team": {
+        "id": "24",
+        "abbreviation": "SA",
+        "displayName": "San Antonio Spurs"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909970",
+   "date": "2026-11-12T01:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909970",
+     "date": "2026-11-12T01:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "29",
+       "homeAway": "home",
+       "winner": false,
+       "score": "118",
+       "team": {
+        "id": "29",
+        "abbreviation": "MEM",
+        "displayName": "Memphis Grizzlies"
+       }
+      },
+      {
+       "id": "7",
+       "homeAway": "away",
+       "winner": true,
+       "score": "123",
+       "team": {
+        "id": "7",
+        "abbreviation": "DEN",
+        "displayName": "Denver Nuggets"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909971",
+   "date": "2026-11-12T01:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909971",
+     "date": "2026-11-12T01:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "15",
+       "homeAway": "home",
+       "winner": false,
+       "score": "112",
+       "team": {
+        "id": "15",
+        "abbreviation": "MIL",
+        "displayName": "Milwaukee Bucks"
+       }
+      },
+      {
+       "id": "13",
+       "homeAway": "away",
+       "winner": true,
+       "score": "123",
+       "team": {
+        "id": "13",
+        "abbreviation": "LAL",
+        "displayName": "Los Angeles Lakers"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909972",
+   "date": "2026-11-12T01:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909972",
+     "date": "2026-11-12T01:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "3",
+       "homeAway": "home",
+       "winner": false,
+       "score": "111",
+       "team": {
+        "id": "3",
+        "abbreviation": "NO",
+        "displayName": "New Orleans Pelicans"
+       }
+      },
+      {
+       "id": "17",
+       "homeAway": "away",
+       "winner": true,
+       "score": "145",
+       "team": {
+        "id": "17",
+        "abbreviation": "BKN",
+        "displayName": "Brooklyn Nets"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909973",
+   "date": "2026-11-12T02:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909973",
+     "date": "2026-11-12T02:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "26",
+       "homeAway": "home",
+       "winner": false,
+       "score": "108",
+       "team": {
+        "id": "26",
+        "abbreviation": "UTAH",
+        "displayName": "Utah Jazz"
+       }
+      },
+      {
+       "id": "19",
+       "homeAway": "away",
+       "winner": true,
+       "score": "123",
+       "team": {
+        "id": "19",
+        "abbreviation": "ORL",
+        "displayName": "Orlando Magic"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909974",
+   "date": "2026-11-12T02:30Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909974",
+     "date": "2026-11-12T02:30Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "10",
+       "homeAway": "home",
+       "winner": true,
+       "score": "115",
+       "team": {
+        "id": "10",
+        "abbreviation": "HOU",
+        "displayName": "Houston Rockets"
+       }
+      },
+      {
+       "id": "9",
+       "homeAway": "away",
+       "winner": false,
+       "score": "108",
+       "team": {
+        "id": "9",
+        "abbreviation": "GS",
+        "displayName": "Golden State Warriors"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401909975",
+   "date": "2026-11-12T03:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "id": "401909975",
+     "date": "2026-11-12T03:00Z",
+     "status": {
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     },
+     "competitors": [
+      {
+       "id": "22",
+       "homeAway": "home",
+       "winner": true,
+       "score": "118",
+       "team": {
+        "id": "22",
+        "abbreviation": "POR",
+        "displayName": "Portland Trail Blazers"
+       }
+      },
+      {
+       "id": "25",
+       "homeAway": "away",
+       "winner": false,
+       "score": "108",
+       "team": {
+        "id": "25",
+        "abbreviation": "OKC",
+        "displayName": "Oklahoma City Thunder"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

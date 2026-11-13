@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { MARKET_UPDATED_EVENT } from "@/lib/liveMarket";
 import { BuyingPower } from "@/components/BuyingPower";
 import { formatUsd } from "@/lib/format";
 import { maxWholeSharesAtPrice, usePortfolioCash } from "@/hooks/usePortfolioCash";
@@ -18,6 +19,14 @@ export function AddMarketPosition() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  // Bumped by LiveMarketRefresher when new prices are published.
+  const [marketVersion, setMarketVersion] = useState(0);
+  useEffect(() => {
+    const onUpdate = () => setMarketVersion((v) => v + 1);
+    window.addEventListener(MARKET_UPDATED_EVENT, onUpdate);
+    return () => window.removeEventListener(MARKET_UPDATED_EVENT, onUpdate);
+  }, []);
+
   useEffect(() => {
     let ok = true;
     fetch("/api/market")
@@ -33,7 +42,7 @@ export function AddMarketPosition() {
     return () => {
       ok = false;
     };
-  }, []);
+  }, [marketVersion]);
 
   const filtered = useMemo(() => {
     if (!rows) return [];
@@ -200,7 +209,7 @@ export function AddMarketPosition() {
                 type="button"
                 disabled={busy}
                 onClick={buy}
-                className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent disabled:opacity-50 sm:ml-auto"
+                className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-50 sm:ml-auto"
               >
                 {busy ? "…" : "Buy"}
               </button>

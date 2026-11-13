@@ -155,7 +155,7 @@ export function PortfolioHoldingsTable({
                         type="button"
                         disabled={busy || p.price == null}
                         onClick={() => trade(p.player_id, "buy", p.shares)}
-                        className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent disabled:opacity-40"
+                        className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-40"
                       >
                         Buy
                       </button>

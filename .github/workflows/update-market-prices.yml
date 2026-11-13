@@ -2,10 +2,15 @@ name: Update Market Prices
 
 on:
   workflow_dispatch:
+    inputs:
+      espn_refetch_from:
+        description: "Leave BLANK for a normal run. Only to repair data: a date like 2026-04-12 re-downloads every final since then."
+        required: false
+        default: ""
   schedule:
-    # Twice per hour at :15 and :45 UTC (avoids :00 UTC, where GitHub warns load can delay/drop schedules).
+    # Every 15 minutes at :07/:22/:37/:52 UTC (avoids :00 UTC, where GitHub warns load can delay/drop schedules).
     # Omit `timezone:` so older GitHub versions still accept the workflow; see events docs for timezone-aware cron.
-    - cron: "15,45 * * * *"
+    - cron: "7,22,37,52 * * * *"
 
 permissions:
   contents: read
@@ -20,7 +25,8 @@ jobs:
     timeout-minutes: 45
     env:
       PYTHONUNBUFFERED: "1"
-      BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+      # Empty on scheduled runs; set from the manual-run input to repair a date range.
+      ESPN_REFETCH_FROM: ${{ github.event.inputs.espn_refetch_from || '' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
@@ -36,31 +42,37 @@ jobs:
       - name: Install pipeline dependencies
         run: pip install -r requirements.txt
 
-      # Restore last successful raw_game_logs.csv (incremental fetch appends new games only).
+      # Restore the newest raw_game_logs.csv (incremental fetch re-reads only the last day or two).
+      # Cache keys are immutable, so every run saves under its own key and restore picks the newest
+      # prefix match. `bdl-raw-v1-` (BALLDONTLIE era) is the last resort: it keeps every player id
+      # the market already uses, but holds partial in-progress box scores, so the fetch step below
+      # re-downloads every final since BALLDONTLIE took over whenever that cache is restored.
       - name: Restore cached raw game logs
+        id: raw-cache
         uses: actions/cache/restore@v4
         with:
           path: data/raw_game_logs.csv
-          key: bdl-raw-v1-bootstrap
+          key: raw-logs-v2-${{ github.run_id }}
           restore-keys: |
+            raw-logs-v2-
             bdl-raw-v1-
 
       - name: Fetch NBA data and rebuild Fair Value
-        run: python pipeline/run_pipeline.py --fetch-balldontlie --active
-
-      - name: Save raw game logs cache
-        if: success()
+        env:
+          MATCHED_CACHE_KEY: ${{ steps.raw-cache.outputs.cache-matched-key }}
         run: |
-          mkdir -p data
-          KEY=$(python -c "from pathlib import Path; import pandas as pd; p=Path('data/raw_game_logs.csv'); print('bootstrap' if not p.is_file() else str(pd.read_csv(p, usecols=['GAME_DATE'])['GAME_DATE'].max())[:10])")
-          echo "BDL_RAW_CACHE_KEY=bdl-raw-v1-${KEY}" >> "$GITHUB_ENV"
+          if [[ "$MATCHED_CACHE_KEY" == bdl-raw-v1-* && -z "$ESPN_REFETCH_FROM" ]]; then
+            echo "Restored the BALLDONTLIE-era cache ($MATCHED_CACHE_KEY): re-fetching every final since 2026-04-12 to replace partial box scores."
+            export ESPN_REFETCH_FROM=2026-04-12
+          fi
+          python pipeline/run_pipeline.py --fetch-espn --active
 
       - name: Upload raw game logs cache
         if: success()
         uses: actions/cache/save@v4
         with:
           path: data/raw_game_logs.csv
-          key: ${{ env.BDL_RAW_CACHE_KEY }}
+          key: raw-logs-v2-${{ github.run_id }}
 
       # The prices revision is bumped by the market step, together with market_revision,
       # so the site never serves new Fair Value against the previous Market Price.

@@ -2,11 +2,12 @@
 Run the NBA stock pipeline in the correct order (from repo root):
 
   python pipeline/run_pipeline.py              # use existing raw CSVs
-  python pipeline/run_pipeline.py --fetch-balldontlie --active  # default production/local refresh (BALLDONTLIE)
-  python pipeline/run_pipeline.py --fetch-balldontlie  # BDL game logs only (add --active for BDL player ids)
+  python pipeline/run_pipeline.py --fetch-espn --active  # default production/local refresh (ESPN box scores + rosters)
+  python pipeline/run_pipeline.py --fetch-espn  # ESPN game logs only (add --active to refresh the roster)
   python pipeline/run_pipeline.py --fetch      # deprecated: stats.nba.com via nba_api (local fallback only)
   python pipeline/run_pipeline.py --fetch --bootstrap-history
-  python pipeline/run_pipeline.py --active     # refresh active_players (BDL or nba static, depending on fetch flags)
+  python pipeline/run_pipeline.py --fetch-espn --espn-refetch-from 2026-04-12  # re-download finals from a date, replacing stored rows
+  python pipeline/run_pipeline.py --active     # refresh active_players (ESPN or nba static, depending on fetch flags)
 
 Steps: raw (optional) -> data_cleaning -> game_score -> price_engine + validate_prices.
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -23,11 +25,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run cleaning through prices in order.")
     fetch_group = parser.add_mutually_exclusive_group()
     fetch_group.add_argument(
-        "--fetch-balldontlie",
+        "--fetch-espn",
         action="store_true",
         help=(
-            "Primary: re-download raw_game_logs.csv from BALLDONTLIE (All-Star+). "
-            "Set BALLDONTLIE_API_KEY. Use with --active so the roster uses the same player ids as the price file."
+            "Primary: refresh raw_game_logs.csv from ESPN box scores (final games only, no key). "
+            "ESPN athlete ids are mapped onto the existing player ids (espn_player_map). "
+            "Use with --active to refresh the roster from ESPN."
         ),
     )
     fetch_group.add_argument(
@@ -35,7 +38,7 @@ def main() -> None:
         action="store_true",
         help=(
             "Deprecated local fallback: re-download raw_game_logs.csv from stats.nba.com via nba_api. "
-            "Do not mix with BALLDONTLIE ids in Supabase."
+            "Its ids are NBA.com ids; do not mix with an ESPN-mapped Supabase dataset."
         ),
     )
     parser.add_argument(
@@ -61,7 +64,16 @@ def main() -> None:
     parser.add_argument(
         "--full-fetch",
         action="store_true",
-        help="Re-download all BALLDONTLIE stats (ignore cached raw_game_logs.csv).",
+        help="Re-download all ESPN stats for the window (ignore cached raw_game_logs.csv).",
+    )
+    parser.add_argument(
+        "--espn-refetch-from",
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
+        help=(
+            "With --fetch-espn: also re-download every final from this date to today and replace "
+            "the stored rows for those days (or set ESPN_REFETCH_FROM)."
+        ),
     )
     parser.add_argument(
         "--fetch-profiles",
@@ -74,7 +86,10 @@ def main() -> None:
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
 
-    if args.fetch or args.fetch_balldontlie:
+    if args.espn_refetch_from and not args.fetch_espn:
+        parser.error("--espn-refetch-from requires --fetch-espn.")
+
+    if args.fetch or args.fetch_espn:
         import season_window as sw
 
         if args.start_year is None and args.end_year is None:
@@ -97,16 +112,17 @@ def main() -> None:
             sw.describe_season_window(start_year, end_year),
         )
 
-        if args.fetch_balldontlie:
-            import balldontlie_fetch as bdl
+        if args.fetch_espn:
+            import espn_fetch
 
-            print("Fetching raw game logs (BALLDONTLIE)…")
+            print("Fetching raw game logs (ESPN)…")
             out_games = sw.DATA_DIR / "raw_game_logs.csv"
-            games_df = bdl.refresh_raw_game_logs(
+            games_df = espn_fetch.refresh_raw_game_logs(
                 start_year=start_year,
                 end_year=end_year,
                 out_path=out_games,
                 force_full=args.full_fetch or args.bootstrap_history,
+                refetch_from=args.espn_refetch_from,
             )
             print(f"Saved {games_df.shape} -> {out_games.relative_to(root)}")
         else:
@@ -146,17 +162,17 @@ def main() -> None:
     if not run_validation(out_df["price_after_game"], csv_path=pe.OUTPUT_CSV, df=out_df):
         sys.exit(1)
 
-    if args.fetch_balldontlie and not args.active:
+    if args.fetch_espn and not args.active:
         print(
             "Note: active_players.csv was not refreshed. Use "
-            "`--fetch-balldontlie --active` so the roster ids match the price file.",
+            "`--fetch-espn --active` so the roster ids match the price file.",
         )
 
     if args.active:
-        if args.fetch_balldontlie:
-            import balldontlie_fetch as bdl
+        if args.fetch_espn:
+            import espn_fetch
 
-            bdl.save_active_players_bdl()
+            espn_fetch.save_active_players_espn()
         else:
             import active_players
 

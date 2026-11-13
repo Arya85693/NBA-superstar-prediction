@@ -19,15 +19,6 @@ export function LandingHero({
 
   return (
     <section className="relative z-0 pb-2 pt-0 md:pb-3">
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[min(18rem,62%)] opacity-90"
-        style={{
-          backgroundImage: `radial-gradient(ellipse 70% 50% at 0% 0%, rgb(181 106 122 / 0.14), transparent 55%),
-            radial-gradient(ellipse 50% 40% at 100% 10%, rgb(30 42 58 / 0.06), transparent 50%)`,
-        }}
-        aria-hidden
-      />
-
       <div className="relative grid items-center gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10 xl:gap-12">
         <div className="max-w-xl lg:max-w-none">
           <Eyebrow>Track · Trade · Learn</Eyebrow>
@@ -46,7 +37,7 @@ export function LandingHero({
             </li>
             <li className="flex gap-2">
               <span className="text-accent" aria-hidden>→</span>
-              Board refreshes ~every 30 minutes
+              Prices tick every ~5 min, live during games
             </li>
             <li className="flex gap-2">
               <span className="text-accent" aria-hidden>→</span>

@@ -1,0 +1,128 @@
+{
+ "events": [
+  {
+   "id": "401909976",
+   "date": "2026-11-13T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0.0",
+      "period": 2,
+      "type": {
+       "id": "23",
+       "name": "STATUS_HALFTIME",
+       "state": "in",
+       "completed": false,
+       "description": "Halftime",
+       "detail": "Halftime",
+       "shortDetail": "Halftime"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401909977",
+   "date": "2026-11-13T00:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0.0",
+      "period": 2,
+      "type": {
+       "id": "23",
+       "name": "STATUS_HALFTIME",
+       "state": "in",
+       "completed": false,
+       "description": "Halftime",
+       "detail": "Halftime",
+       "shortDetail": "Halftime"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401909978",
+   "date": "2026-11-13T01:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0.0",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Thu, November 12th at 8:00 PM EST",
+       "shortDetail": "11/12 - 8:00 PM EST"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401909979",
+   "date": "2026-11-13T02:00Z",
+   "season": {
+    "year": 2027,
+    "type": 2,
+    "slug": "regular-season"
+   },
+   "competitions": [
+    {
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0.0",
+      "period": 0,
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Thu, November 12th at 9:00 PM EST",
+       "shortDetail": "11/12 - 9:00 PM EST"
+      }
+     },
+     "type": {
+      "id": "1",
+      "abbreviation": "STD"
+     }
+    }
+   ]
+  }
+ ]
+}

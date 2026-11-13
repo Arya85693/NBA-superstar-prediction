@@ -93,7 +93,7 @@ export default async function PortfolioPage() {
 
         title="Portfolio"
 
-        description="Starter account funded with $100,000. Holdings mark to the latest model quotes from each refresh cycle; cost basis and P&amp;L come from your trade history. Portfolio values update automatically when new game data is ingested (~30 min cadence)."
+        description="Starter account funded with $100,000. Holdings mark to the latest model quotes from each refresh cycle; cost basis and P&amp;L come from your trade history. Portfolio values update automatically as Market Prices tick (~5 min, live during games)."
 
         marketMeta={marketMeta}
 

@@ -59,7 +59,7 @@ export type MarketBreadthStats = {
 
 export type MarketAnalytics = {
   pulse: MarketPulseMetrics;
-  /** Largest Market Price moves since the prior pipeline cycle (~30 min). */
+  /** Largest Market Price moves since the prior full pipeline cycle (~15 min). */
   topGainers: MarketMoverSnapshot[];
   topLosers: MarketMoverSnapshot[];
   /** Highest forward-improvement outlook (projection + minutes; backtest-aligned). */

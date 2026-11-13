@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MARKET_UPDATED_EVENT } from "@/lib/liveMarket";
 import { formatUsdNumberOnly } from "@/lib/format";
 import {
   readWatchlist,
@@ -39,6 +40,14 @@ export function WatchlistPanel() {
     return () => window.removeEventListener("watchlist-updated", load);
   }, [load]);
 
+  // Bumped by LiveMarketRefresher when new prices are published.
+  const [marketVersion, setMarketVersion] = useState(0);
+  useEffect(() => {
+    const onUpdate = () => setMarketVersion((v) => v + 1);
+    window.addEventListener(MARKET_UPDATED_EVENT, onUpdate);
+    return () => window.removeEventListener(MARKET_UPDATED_EVENT, onUpdate);
+  }, []);
+
   useEffect(() => {
     let ok = true;
     fetch("/api/market")
@@ -54,7 +63,7 @@ export function WatchlistPanel() {
     return () => {
       ok = false;
     };
-  }, []);
+  }, [marketVersion]);
 
   const rows: WatchlistRow[] = useMemo(() => {
     const byId = new Map<number, MarketRow>();
@@ -184,7 +193,7 @@ export function WatchlistPanel() {
         </table>
       </div>
       <p className="mt-3 text-xs text-muted">
-        Stored on this device. Prices update on each market refresh (~30 min).
+        Stored on this device. Prices update live as the market ticks (~5 min).
       </p>
     </div>
   );

@@ -105,7 +105,7 @@ async function loadTicksFromSupabase(
 }
 
 /**
- * Intraday Market Price ticks (~30 min pipeline cycles). Supabase when hosted,
+ * Intraday Market Price ticks (~5 min live ticks plus ~15 min pipeline cycles). Supabase when hosted,
  * else `data/player_market_ticks.csv` after `update_market_state.py`.
  */
 export async function getMarketTicksForPlayer(

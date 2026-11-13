@@ -30,7 +30,7 @@ const modelSteps = [
   {
     step: "02",
     title: "Ingested games",
-    body: "As regular-season and playoff games enter each ingestion cycle (~30 min cadence), performance feeds the automated repricing engine. The price is a smoothed signal - it carries season context, not just the last box score.",
+    body: "As regular-season and playoff games finish (box scores are ingested every ~15 min), performance feeds the automated repricing engine. During a game, a provisional value moves with the live box score. The price is a smoothed signal - it carries season context, not just the last box score.",
     icon: "◇",
   },
   {
@@ -55,7 +55,7 @@ const screens = [
   {
     title: "Player page",
     href: "/market",
-    accent: "from-sky-500/12 to-transparent",
+    accent: "from-accent/10 to-transparent",
     bullets: [
       "Ticker, team, last game date, and season label sit up top for orientation.",
       "Price charts carry model quotes forward between games; tooltips show game score on nights with ingested box scores.",
@@ -65,7 +65,7 @@ const screens = [
   {
     title: "Portfolio",
     href: "/portfolio",
-    accent: "from-violet-500/12 to-transparent",
+    accent: "from-accent/6 to-transparent",
     bullets: [
       "Paper cash, position value, and total equity - same framing as a simple brokerage view.",
       "Use it to test sizing and holds against the same quotes the model publishes.",
@@ -92,7 +92,7 @@ const glossary = [
   },
   {
     term: "Rolling snapshot",
-    def: "Board state after the most recent ingestion cycle. Quotes refresh when new games are added (~30 min cadence), not tick-by-tick.",
+    def: "Board state after the most recent ingestion cycle. Market Price ticks every ~5 minutes and moves live during games; Fair Value settles when the final box score is ingested.",
   },
   {
     term: "Board total",
@@ -115,7 +115,7 @@ export default async function HowItWorksPage() {
       <PageHeader
         eyebrow="Guide"
         title="How it works"
-        description="How the automated repricing engine works, how rolling snapshots refresh (~30 min when new games ingest), and how paper trading fits in. Educational - not financial advice or real securities."
+        description="How the automated repricing engine works, how prices tick every ~5 min and move live during games, and how paper trading fits in. Educational - not financial advice or real securities."
         marketMeta={marketMeta}
         showSimulationNote
       />
@@ -141,8 +141,8 @@ export default async function HowItWorksPage() {
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.4]"
           style={{
-            backgroundImage: `radial-gradient(circle at 15% 40%, rgb(183 110 121 / 0.12), transparent 50%),
-              radial-gradient(circle at 85% 60%, rgb(148 163 184 / 0.1), transparent 45%)`,
+            backgroundImage: `radial-gradient(circle at 15% 40%, rgb(var(--chart-accent-rgb) / 0.12), transparent 50%),
+              radial-gradient(circle at 85% 60%, rgb(var(--chart-accent-rgb) / 0.05), transparent 45%)`,
           }}
         />
         <div className="relative grid gap-6 md:grid-cols-[1fr_auto] md:items-center md:gap-10">
@@ -152,8 +152,8 @@ export default async function HowItWorksPage() {
             </p>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-foreground">
               You&apos;re paper-trading simulated shares tied to player value. Prices blend anchors, history,
-              and each ingestion cycle; the board refreshes automatically (~30 min) when new games
-              arrive - a rolling snapshot, not a live exchange feed.
+              and each ingestion cycle; prices tick every ~5 min and move with live box scores during
+              games - open pages update on their own.
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-3 sm:flex-row md:flex-col">

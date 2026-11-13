@@ -289,7 +289,7 @@ function PerformanceWeekView({ data }: { data: EnrichedPoint[] }) {
                 </defs>
                 <XAxis
                   dataKey="shortDate"
-                  tick={{ ...chartTypography.tick, fontSize: 9 }}
+                  tick={{ ...chartTypography.tick, fill: chartColors.tick, fontSize: 9 }}
                   tickLine={false}
                   axisLine={{ stroke: chartColors.axis, strokeWidth: 1 }}
                   interval={0}
@@ -375,7 +375,7 @@ function PerformanceFullChart({ data }: { data: EnrichedPoint[] }) {
             />
             <XAxis
               dataKey="date"
-              tick={chartTypography.tick}
+              tick={{ ...chartTypography.tick, fill: chartColors.tick }}
               tickLine={false}
               axisLine={{ stroke: chartColors.axis, strokeWidth: 1 }}
               tickFormatter={formatAxisDate}
@@ -386,7 +386,7 @@ function PerformanceFullChart({ data }: { data: EnrichedPoint[] }) {
             <YAxis
               yAxisId="price"
               domain={[priceMin - pricePad, priceMax + pricePad]}
-              tick={chartTypography.tickMono}
+              tick={{ ...chartTypography.tickMono, fill: chartColors.tick }}
               tickLine={false}
               axisLine={false}
               width={52}
@@ -400,7 +400,7 @@ function PerformanceFullChart({ data }: { data: EnrichedPoint[] }) {
               yAxisId="gmsc"
               orientation="right"
               domain={[0, "auto"]}
-              tick={chartTypography.tickMono}
+              tick={{ ...chartTypography.tickMono, fill: chartColors.tick }}
               tickLine={false}
               axisLine={false}
               width={36}

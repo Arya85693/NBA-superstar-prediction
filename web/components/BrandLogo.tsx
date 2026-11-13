@@ -28,9 +28,9 @@ export function BrandLogo({
         priority
       />
       {showWordmark ? (
-        <span className="text-[15px] font-semibold tracking-tight text-charcoal sm:text-base">
+        <span className="hs-wordmark text-[13px] text-charcoal sm:text-sm">
           Hoops{" "}
-          <span className="font-normal text-muted-foreground">Stock Market</span>
+          <span className="text-accent">Stock Market</span>
         </span>
       ) : (
         <span className="sr-only">Hoops Stock Market</span>

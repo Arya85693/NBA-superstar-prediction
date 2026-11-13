@@ -131,7 +131,7 @@ export function PlayerChartSection({
                 onClick={() => setView(key)}
                 className={
                   on
-                    ? "rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white shadow-sm"
+                    ? "rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-foreground shadow-sm"
                     : "rounded-lg px-3.5 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 }
               >
@@ -150,7 +150,7 @@ export function PlayerChartSection({
                 onClick={() => setRange(key)}
                 className={
                   on
-                    ? "rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-white shadow-sm"
+                    ? "rounded-lg bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-foreground shadow-sm"
                     : "rounded-lg px-3.5 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 }
               >

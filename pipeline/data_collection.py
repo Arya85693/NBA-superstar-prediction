@@ -1,7 +1,7 @@
 """
 Collect raw NBA game logs via nba_api / stats.nba.com (deprecated local fallback).
 
-Primary fetch is BALLDONTLIE (`pipeline/balldontlie_fetch.py`). Use this module only with
+Primary fetch is ESPN (`pipeline/espn_fetch.py`). Use this module only with
 `run_pipeline.py --fetch` or `PRICES_FETCH_SOURCE=nba_api`.
 
 Writes:

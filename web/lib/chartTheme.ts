@@ -1,7 +1,7 @@
-/** Shared tokens for Recharts + SVG charts - editorial finance, not crypto UI. */
+/** Shared tokens for Recharts + SVG charts - synthwave theme. Live values come from CSS vars. */
 
-export const CHART_ACCENT = "#b76e79";
-export const CHART_ACCENT_RGB = "183 110 121";
+export const CHART_ACCENT = "#ff4fd8";
+export const CHART_ACCENT_RGB = "255 79 216";
 
 export type ChartColorTokens = {
   accent: string;
@@ -15,12 +15,12 @@ export type ChartColorTokens = {
 
 const chartColorsLight: ChartColorTokens = {
   accent: CHART_ACCENT,
-  grid: "rgba(44, 40, 37, 0.07)",
-  axis: "rgba(111, 104, 96, 0.28)",
-  tick: "#6f6860",
-  tickMuted: "#8a827a",
-  cursor: "rgba(111, 104, 96, 0.35)",
-  surface: "#fffcfa",
+  grid: "rgba(183, 227, 244, 0.08)",
+  axis: "rgba(163, 200, 216, 0.22)",
+  tick: "#6e98ac",
+  tickMuted: "#537a8d",
+  cursor: "rgba(163, 200, 216, 0.3)",
+  surface: "#06293c",
 };
 
 function readCssVar(name: string, fallback: string): string {
@@ -56,7 +56,7 @@ export const chartTypography = {
     fill: chartColorsLight.tick,
     fontSize: 10.5,
     fontWeight: 500,
-    fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+    fontFamily: "var(--font-code), ui-monospace, monospace",
   },
 } as const;
 

@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 
 import Link from "next/link";
 
-import { Geist, Geist_Mono } from "next/font/google";
+import { Audiowide, Geist, JetBrains_Mono } from "next/font/google";
 
+import { LiveMarketRefresher } from "@/components/live/LiveMarketRefresher";
 import { Nav } from "@/components/Nav";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
@@ -22,12 +23,17 @@ const geistSans = Geist({
 
 
 
-const geistMono = Geist_Mono({
-
-  variable: "--font-geist-mono",
-
+// Synthwave: readout numerals and labels.
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-code",
   subsets: ["latin"],
+});
 
+// Synthwave: 80s chrome display face for headings and the wordmark.
+const audiowide = Audiowide({
+  variable: "--font-display",
+  weight: "400",
+  subsets: ["latin"],
 });
 
 
@@ -41,7 +47,7 @@ export const metadata: Metadata = {
     template: "%s · Hoops Stock Market",
   },
   description:
-    "Near real-time NBA player market analytics - model-driven paper trading with automated repricing from ingested game data (~30 min refresh cadence).",
+    "Near real-time NBA player market analytics - model-driven paper trading with Market Prices that tick every ~5 minutes and move live during games.",
   openGraph: {
     type: "website",
     siteName: "Hoops Stock Market",
@@ -83,7 +89,7 @@ export default function RootLayout({
 
       lang="en"
 
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${jetbrainsMono.variable} ${audiowide.variable} h-full antialiased`}
 
       suppressHydrationWarning
 
@@ -94,6 +100,8 @@ export default function RootLayout({
         <ThemeScript />
 
         <ThemeProvider>
+
+        <LiveMarketRefresher />
 
         <a href="#main-content" className="skip-link">
 
@@ -125,7 +133,7 @@ export default function RootLayout({
 
               Model-driven simulation - paper currency only. Prices refresh on ingestion cycles
 
-              (~30 min), not tick-by-tick. Not investment advice or real securities.
+              every ~5 min (live during games). Not investment advice or real securities.
 
             </p>
 

@@ -39,8 +39,9 @@ import csv
 import json
 import os
 import sys
+import time
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,7 @@ if str(_PIPELINE_DIR) not in sys.path:
 from availability import AvailabilityResult, compute_availability  # noqa: E402
 from demand_engine import build_demand_window, compute_demand  # noqa: E402
 from espn_injuries import fetch_injuries, normalize_name  # noqa: E402
+from fv_live_state import build_fv_states  # noqa: E402
 from news_sentiment import fetch_news_sentiment  # noqa: E402
 from market_config import (  # noqa: E402
     DEFAULT_CONFIG,
@@ -90,6 +92,16 @@ MARKET_STATE_CSV = REPO_ROOT / "data" / "player_market_state.csv"
 MARKET_TICKS_CSV = REPO_ROOT / "data" / "player_market_ticks.csv"
 
 BATCH = 500
+
+# Live market (supabase/live_market.sql): the market-tick Edge Function steps
+# Market Price every 5 minutes. This step holds a lease while it reads and writes
+# player_market_state so the two never overwrite each other.
+LEASE_HOLDER = f"python-market-step:{os.getpid()}"
+LEASE_SECONDS = 600
+LEASE_WAIT_ATTEMPTS = 12
+LEASE_WAIT_SECONDS = 5.0
+# Live rows older than this can't be unsettled games (games finish same night).
+LIVE_LOOKBACK_DAYS = 2
 
 
 # ---------------------------------------------------------------------------
@@ -569,6 +581,102 @@ def publish_revisions(client) -> str:
     return "bump_prices_revision + bump_market_revision"
 
 
+# ---------------------------------------------------------------------------
+# Live market integration (supabase/live_market.sql); every call degrades to the
+# previous behaviour when that migration isn't installed yet.
+# ---------------------------------------------------------------------------
+def acquire_market_lease(
+    client,
+    holder: str = LEASE_HOLDER,
+    seconds: int = LEASE_SECONDS,
+) -> bool | None:
+    """True when acquired, False when another writer holds it, None if not installed."""
+    try:
+        resp = client.rpc(
+            "acquire_market_lease", {"p_holder": holder, "p_seconds": int(seconds)},
+        ).execute()
+    except Exception as e:  # noqa: BLE001
+        if is_missing_relation_error(e):
+            return None
+        raise
+    return bool(resp.data)
+
+
+def release_market_lease(client, holder: str = LEASE_HOLDER) -> None:
+    try:
+        client.rpc("release_market_lease", {"p_holder": holder}).execute()
+    except Exception as e:  # noqa: BLE001
+        print(f"  (could not release market lease; it expires on its own: {e})", file=sys.stderr)
+
+
+def fv_state_rows(df: pd.DataFrame, active_ids: set[int], updated_at: str) -> list[dict[str, Any]]:
+    """player_fv_state rows (one per active player) from the Fair Value frame (pure)."""
+    states = build_fv_states(df)
+    if active_ids:
+        states = [s for s in states if s.player_id in active_ids]
+    return [{**s.to_row(), "updated_at": updated_at} for s in states]
+
+
+def sync_fv_states(client, rows: list[dict[str, Any]]) -> bool:
+    """Upsert player_fv_state; False when the table isn't installed."""
+    try:
+        for i in range(0, len(rows), BATCH):
+            client.table("player_fv_state").upsert(
+                rows[i : i + BATCH], on_conflict="player_id",
+            ).execute()
+    except Exception as e:  # noqa: BLE001
+        if is_missing_relation_error(e):
+            return False
+        raise
+    return True
+
+
+def fetch_live_fair_values(client, since_date: str) -> list[dict[str, Any]]:
+    """Recent player_live_games rows ([] when the table isn't installed)."""
+    try:
+        resp = (
+            client.table("player_live_games")
+            .select("player_id, game_date, game_state, live_fair_value")
+            .gte("game_date", since_date)
+            .execute()
+        )
+    except Exception as e:  # noqa: BLE001
+        if is_missing_relation_error(e):
+            return []
+        raise
+    return list(resp.data or [])
+
+
+def apply_live_fair_values(
+    inputs: dict[int, dict[str, Any]],
+    live_rows: list[dict[str, Any]],
+    last_game_by_player: dict[int, date],
+) -> int:
+    """
+    Price players in an unsettled game (live, or final but not yet ingested) at
+    their provisional live Fair Value, so this step agrees with the 5-minute tick
+    instead of pulling price back to pre-game Fair Value. A row is settled once
+    Fair Value has a game on or after its date. Mutates ``inputs``; returns count.
+    """
+    applied = 0
+    for r in live_rows:
+        try:
+            pid = int(r["player_id"])
+            game_day = date.fromisoformat(str(r["game_date"])[:10])
+            live_fv = float(r["live_fair_value"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        info = inputs.get(pid)
+        if info is None or not is_valid_fair_value(live_fv):
+            continue
+        last = last_game_by_player.get(pid)
+        if last is not None and last >= game_day:
+            continue
+        info["fair_value"] = live_fv
+        applied += 1
+    return applied
+
+
 def write_local_csv(rows: list[dict[str, Any]]) -> None:
     import json
 
@@ -615,6 +723,16 @@ def append_local_ticks(rows: list[dict[str, Any]], recorded_at: str) -> None:
 
 
 def main() -> None:
+    lease_clients: list = []
+    try:
+        _run_market_step(lease_clients)
+    finally:
+        for client in lease_clients:
+            release_market_lease(client)
+
+
+def _run_market_step(lease_clients: list) -> None:
+    """The market step; appends the client to ``lease_clients`` once it holds the lease."""
     if not PRICES_CSV.is_file():
         print(f"Missing {PRICES_CSV}. Run pipeline/run_pipeline.py first.", file=sys.stderr)
         sys.exit(1)
@@ -681,6 +799,22 @@ def main() -> None:
         from supabase import create_client
 
         client = create_client(url, key)
+
+        # Hold the lease from reading previous state until publishing, so the
+        # 5-minute tick can't write in between. main() releases it in `finally`.
+        lease = acquire_market_lease(client)
+        attempts = 1
+        while lease is False and attempts < LEASE_WAIT_ATTEMPTS:
+            time.sleep(LEASE_WAIT_SECONDS)
+            lease = acquire_market_lease(client)
+            attempts += 1
+        if lease is False:
+            print("Aborting: another writer holds the market lease.", file=sys.stderr)
+            sys.exit(1)
+        if lease:
+            lease_clients.append(client)
+            print("  live market: holding market lease.")
+
         # A failed read must not look like "no previous state": that would
         # cold-start every player (or zero demand) and publish it. Only a missing
         # table (first run) is treated as empty; anything else aborts before writes.
@@ -700,6 +834,19 @@ def main() -> None:
                 print(f"Aborting: could not read trades ({e}).", file=sys.stderr)
                 sys.exit(1)
             print(f"  (skipping demand — trades table not installed: {e})")
+
+        # Only after every read succeeded: a failed read must leave no writes.
+        fv_rows = fv_state_rows(df, active_ids, datetime.now(timezone.utc).isoformat())
+        if sync_fv_states(client, fv_rows):
+            print(f"  live market: exported Fair Value state for {len(fv_rows)} players.")
+        else:
+            print("  live market: player_fv_state not installed (supabase/live_market.sql) — skipped.")
+
+        since = (as_of_date_obj - timedelta(days=LIVE_LOOKBACK_DAYS)).isoformat()
+        live_rows = fetch_live_fair_values(client, since)
+        n_live = apply_live_fair_values(inputs, live_rows, last_game_by_player)
+        if n_live:
+            print(f"  live market: {n_live} players priced at live in-game Fair Value.")
     else:
         # Local fallback: reuse previous local CSV for continuity if present.
         if MARKET_STATE_CSV.is_file():

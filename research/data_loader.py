@@ -70,7 +70,7 @@ def load_evaluation_frame(config: BacktestConfig) -> tuple[pd.DataFrame, dict[st
     else:
         raise FileNotFoundError(
             "No research data found. Run from repo root:\n"
-            "  python pipeline/run_pipeline.py --fetch-balldontlie --active\n"
+            "  python pipeline/run_pipeline.py --fetch-espn --active\n"
             f"Expected {config.data.prices_csv} or {config.data.game_logs_csv}"
         )
 
