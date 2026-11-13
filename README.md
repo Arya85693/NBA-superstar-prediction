@@ -18,13 +18,13 @@ Simulated player “stocks” driven by game logs, Hollinger game score, and a p
 pip install -r requirements.txt
 python pipeline/run_pipeline.py              # build from existing raw CSVs
 python pipeline/run_pipeline.py --fetch-espn --active   # default refresh (ESPN box scores + ESPN rosters)
-python pipeline/run_pipeline.py --fetch-balldontlie --active   # deprecated fallback (BALLDONTLIE, API key)
+python pipeline/run_pipeline.py --fetch-espn --espn-refetch-from 2026-04-12   # re-download finals from a date, replacing stored rows
 python pipeline/run_pipeline.py --fetch      # deprecated: stats.nba.com via nba_api (local fallback only)
 python pipeline/run_pipeline.py --fetch --bootstrap-history
 python pipeline/run_pipeline.py --active     # refresh active_players.csv (use with a fetch flag)
 ```
 
-Individual steps: `pipeline/espn_fetch.py` (or the fallbacks `pipeline/balldontlie_fetch.py` / `pipeline/data_collection.py`) → `pipeline/data_cleaning.py` → `pipeline/game_score.py` → `pipeline/price_engine.py`.
+Individual steps: `pipeline/espn_fetch.py` (or the legacy `pipeline/data_collection.py`) → `pipeline/data_cleaning.py` → `pipeline/game_score.py` → `pipeline/price_engine.py`.
 
 ### Recommended local workflow (aligned with production)
 
@@ -52,7 +52,7 @@ python pipeline/sync_prices_to_supabase.py
   - Incremental: each run re-reads from the latest cached `GAME_DATE` − 1 day through today (US/Eastern). On those dates a final ESPN row **replaces** the cached row for the same player + date (heals partial rows, picks up stat corrections). A cold start reads every day of the season (~1,600 requests per season, ~10 min at the default 0.3 s pause).
   - ESPN reports whole minutes (BALLDONTLIE reported fractional minutes), the same as the older nba_api history.
   - Stat columns are looked up by ESPN's stat *key*, never by position; if ESPN changes the payload the fetch stops with `EspnShapeError` instead of writing bad rows.
-- **Deprecated fallback:** [BALLDONTLIE](https://nba.balldontlie.io/) via `pipeline/balldontlie_fetch.py` — `--fetch-balldontlie --active` or `PRICES_FETCH_SOURCE=balldontlie` (requires `BALLDONTLIE_API_KEY`, **All-Star+** tier).
+- **BALLDONTLIE was removed** (Nov 2026). Its incremental fetch stored box scores from games still in progress and never replaced them with the finals; repair any affected range with `--espn-refetch-from YYYY-MM-DD` (or the workflow's manual-run input).
 - **Deprecated local fallback:** `stats.nba.com` via [`nba_api`](https://github.com/swar/nba_api) (`--fetch` or `PRICES_FETCH_SOURCE=nba_api` for `update_market_local.py`).
 
 **Player ids never change.** Every market table (`player_game_prices`, `player_market_state`, `positions`, `trades`, watchlists) is keyed by the existing player ids — NBA.com ids for most players, BALLDONTLIE ids for some newer ones. ESPN uses its own athlete ids, so `pipeline/espn_player_map.py` maps each ESPN id onto an existing id once and stores it in the Supabase table **`public.espn_player_map`** (`espn_id` → `player_id`, unique both ways). Run **`supabase/espn_player_map.sql`** once in the Supabase SQL Editor before the first ESPN run. Without Supabase credentials the map is kept in `data/espn_player_map.csv`.
@@ -60,7 +60,7 @@ python pipeline/sync_prices_to_supabase.py
 - Matching: same normalised name (accents, punctuation and Jr/Sr/II/III ignored), confirmed by birth date (ESPN roster vs `data/player_profiles.csv`, ±1 day) when both are known; then name variants ("AJ"/"A.J.", word order), same last name + birth date, and same team + last name. When the exact-name id has not played recently but a variant has (e.g. BALLDONTLIE kept its own id for "Nicolas Claxton"), the id still playing wins — that is the one the market trades. Every non-exact choice is printed for review.
 - Genuinely new players get `player_id = 9000000000 + ESPN id`. One player id is never given to two ESPN ids.
 - To fix a mapping by hand, edit its row in `espn_player_map` (set `matched_by = 'manual'`) before the next run.
-- The first ESPN run must see the BALLDONTLIE-era raw-log cache (CI restores it via the `bdl-raw-v1-` restore key), so this season's rookies keep their BALLDONTLIE ids. With an empty map and no recent games in the cache the fetch refuses to start; set `ESPN_MAP_ALLOW_COLD_START=1` only if you really want to map from scratch.
+- The map is persisted in Supabase, so later runs never re-match players from scratch. With an empty map and no recent games in the cache the fetch refuses to start; set `ESPN_MAP_ALLOW_COLD_START=1` only if you really want to map from scratch.
 
 ### Environment variables (pipeline / local updater)
 
@@ -69,17 +69,11 @@ python pipeline/sync_prices_to_supabase.py
 | `ESPN_REQUEST_PAUSE_SECONDS` | ESPN fetch (default) | Pause before each ESPN request (default `0.3`). Requests retry with backoff on network errors, 429 and 5xx. |
 | `ESPN_PLAYER_MAP_SUPABASE` | ESPN fetch | Set `0` to keep the ESPN id map in `data/espn_player_map.csv` even when Supabase keys are set. |
 | `ESPN_MAP_ALLOW_COLD_START` | ESPN fetch | Set `1` to build the ESPN id map from scratch against a stale cache (see above). |
-| `PIPELINE_FULL_FETCH` | ESPN / BDL fetch | `1` re-downloads the whole window instead of the incremental refresh (same as `--full-fetch`). |
-| `BALLDONTLIE_API_KEY` | BDL fallback only | All-Star+ for `GET /nba/v1/stats`. Not needed for the default ESPN fetch. |
-| `BALLDONTLIE_REQUEST_PAUSE_SECONDS` | BDL fetch | Pause between HTTP calls (default `1.05`). **Increase** (e.g. `2`–`3`) if you see `429 Too Many Requests` on long local runs. |
-| `BALLDONTLIE_PER_PAGE` | BDL fetch | Max `100` (default `100`). |
-| `PRICES_FETCH_SOURCE` | `update_market_local.py` only | Default `espn`. `balldontlie` for the deprecated BDL fallback, `nba_api` for the `--fetch` path. |
+| `PIPELINE_FULL_FETCH` | ESPN fetch | `1` re-downloads the whole window instead of the incremental refresh (same as `--full-fetch`). |
+| `ESPN_REFETCH_FROM` | ESPN fetch | `YYYY-MM-DD`: also re-download every final from that date and replace the stored rows (same as `--espn-refetch-from`). |
+| `PRICES_FETCH_SOURCE` | `update_market_local.py` only | Default `espn`; `nba_api` for the legacy `--fetch` path. |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Sync + hosted app + ESPN id map | Sync script and `espn_player_map`; service role is server-only. |
 | `NBA_API_*` | `nba_api` fallback only | Timeouts/retries when using `--fetch` (see `pipeline/data_collection.py`). |
-
-### BALLDONTLIE rate limiting (fallback only)
-
-Full prior+current-season fetches paginate thousands of requests. If a local run fails with **`HTTP 429`**, wait and retry, or raise `BALLDONTLIE_REQUEST_PAUSE_SECONDS` in `.env.local`. CI uses the same API with repository secrets; very long interactive runs are more likely to hit limits than the scheduled workflow.
 
 Game-log collection includes both **Regular Season** and **Playoffs**. Prices update only when a
 player logs another game; between games, the last model price stays flat.
@@ -90,7 +84,7 @@ market. Use `--bootstrap-history` only when you intentionally want a deeper rebu
 
 ## Data flow
 
-1. **Raw** (`data/raw_game_logs.csv`) — per-game box scores (ESPN by default; BALLDONTLIE or nba_api as deprecated fallbacks)  
+1. **Raw** (`data/raw_game_logs.csv`) — per-game box scores (ESPN by default; nba_api as a legacy fallback)  
 2. **Cleaned** — standardized columns  
 3. **Game score** — `data/cleaned_game_logs_with_game_score.csv`  
 4. **Prices** — `data/player_game_prices.csv`
@@ -119,8 +113,8 @@ Open [http://localhost:3000](http://localhost:3000).
 
 **Automatic updates:** `.github/workflows/update-market-prices.yml` fetches via **ESPN**
 (`--fetch-espn --active`), rebuilds prices, and syncs to Supabase every 15 minutes (UTC :07, :22, :37, :52).
-Add repository secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (and run `supabase/espn_player_map.sql`) before enabling that workflow; `BALLDONTLIE_API_KEY` is only needed for the fallback.
-The raw-log cache is saved under `raw-logs-v2-<run id>` each run and restored from the newest `raw-logs-v2-` entry (falling back to the BALLDONTLIE-era `bdl-raw-v1-` cache).
+Add repository secrets `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (and run `supabase/espn_player_map.sql`) before enabling that workflow. No stats API key is needed.
+The raw-log cache is saved under `raw-logs-v2-<run id>` each run and restored from the newest `raw-logs-v2-` entry. If only the BALLDONTLIE-era `bdl-raw-v1-` cache exists (e.g. the first run on a branch), the workflow restores it for the player ids and automatically re-fetches every final since 2026-04-12, replacing its partial box scores.
 
 **Local scheduler (alternative to CI):** schedule `python pipeline/update_market_local.py` (defaults to ESPN, same as CI). On Windows, use Task Scheduler. For the legacy NBA API path only, set `PRICES_FETCH_SOURCE=nba_api` in `.env.local`.
 

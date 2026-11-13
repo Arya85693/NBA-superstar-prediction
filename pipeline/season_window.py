@@ -1,7 +1,7 @@
 """
-NBA season window helpers shared by BALLDONTLIE and nba_api fetch paths.
+NBA season window helpers shared by the ESPN and nba_api fetch paths.
 
-No third-party stats API imports — safe to use from production BALLDONTLIE jobs
+No third-party stats API imports — safe to use from production ESPN jobs
 without loading `nba_api`.
 """
 from __future__ import annotations

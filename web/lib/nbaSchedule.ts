@@ -11,18 +11,6 @@ export type UpcomingGame = {
   postseason: boolean;
 };
 
-type BdlTeam = { abbreviation?: string };
-type BdlGameRow = {
-  id: number;
-  date?: string;
-  datetime?: string | null;
-  status?: string;
-  postponed?: boolean;
-  postseason?: boolean;
-  home_team?: BdlTeam;
-  visitor_team?: BdlTeam;
-};
-
 type EspnScoreboard = {
   events?: EspnEvent[];
 };
@@ -30,6 +18,7 @@ type EspnScoreboard = {
 type EspnEvent = {
   id?: string;
   date?: string;
+  season?: { type?: number };
   competitions?: Array<{
     status?: { type?: { completed?: boolean; state?: string } };
     competitors?: Array<{
@@ -39,7 +28,7 @@ type EspnEvent = {
   }>;
 };
 
-/** ESPN and other short labels → market (BDL) abbreviations used in player rows. */
+/** ESPN and other short labels → market abbreviations used in player rows. */
 const ESPN_TO_MARKET: Record<string, string> = {
   NY: "NYK",
   SA: "SAS",
@@ -52,22 +41,19 @@ const ESPN_TO_MARKET: Record<string, string> = {
 
 const CACHE_SECONDS = 3600;
 const SLATE_LOOKAHEAD_DAYS = 7;
-const CACHE_KEY_VERSION = "v2";
+// v3: ESPN only (BALLDONTLIE removed); bump to drop entries cached from the old source.
+const CACHE_KEY_VERSION = "v3";
+
+// ESPN rejects some non-browser clients (403); send the same headers as the pipeline.
+const ESPN_HEADERS = {
+  Accept: "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+};
 
 export function normalizeTeamAbbr(abbr: string): string {
   const key = abbr.trim().toUpperCase();
   return ESPN_TO_MARKET[key] ?? key;
-}
-
-function bdlApiKey(): string | null {
-  const key = (process.env.BALLDONTLIE_API_KEY ?? "").trim();
-  return key || null;
-}
-
-function bdlBaseUrl(): string {
-  return (
-    process.env.BALLDONTLIE_BASE_URL ?? "https://api.balldontlie.io"
-  ).replace(/\/$/, "");
 }
 
 /** Calendar date YYYY-MM-DD in US Eastern (slate day boundaries). */
@@ -95,21 +81,6 @@ function listDatesInclusive(startYmd: string, endYmd: string): string[] {
 
 function ymdToEspn(ymd: string): string {
   return ymd.replace(/-/g, "");
-}
-
-function parseBdlGame(row: BdlGameRow): UpcomingGame | null {
-  const home = normalizeTeamAbbr(row.home_team?.abbreviation ?? "");
-  const visitor = normalizeTeamAbbr(row.visitor_team?.abbreviation ?? "");
-  if (!home || !visitor || !row.date) return null;
-  return {
-    id: row.id,
-    date: row.date,
-    datetime: row.datetime ?? null,
-    status: (row.status ?? "").trim(),
-    home_abbr: home,
-    visitor_abbr: visitor,
-    postseason: Boolean(row.postseason),
-  };
 }
 
 function parseEspnEvent(event: EspnEvent): UpcomingGame | null {
@@ -143,7 +114,7 @@ function parseEspnEvent(event: EspnEvent): UpcomingGame | null {
     status: state || "scheduled",
     home_abbr: home,
     visitor_abbr: visitor,
-    postseason: false,
+    postseason: event.season?.type === 3, // ESPN season type 3 = playoffs
   };
 }
 
@@ -189,65 +160,6 @@ function dedupeGames(games: UpcomingGame[]): UpcomingGame[] {
   return out;
 }
 
-async function fetchBdlGames(
-  startDate: string,
-  endDate: string,
-  apiKey: string,
-): Promise<UpcomingGame[]> {
-  const paths = ["/nba/v1/games", "/v1/games"];
-  let lastError: Error | null = null;
-
-  for (const path of paths) {
-    try {
-      const collected: UpcomingGame[] = [];
-      let cursor: string | null = null;
-
-      do {
-        const params = new URLSearchParams();
-        params.set("start_date", startDate);
-        params.set("end_date", endDate);
-        params.set("per_page", "100");
-        if (cursor) params.set("cursor", cursor);
-
-        const url = `${bdlBaseUrl()}${path}?${params.toString()}`;
-        const res = await fetch(url, {
-          headers: { Authorization: apiKey, Accept: "application/json" },
-          next: { revalidate: CACHE_SECONDS },
-        });
-
-        if (!res.ok) {
-          const body = await res.text().catch(() => "");
-          throw new Error(
-            `BALLDONTLIE games HTTP ${res.status}: ${body.slice(0, 200)}`,
-          );
-        }
-
-        const json = (await res.json()) as {
-          data?: BdlGameRow[];
-          meta?: { next_cursor?: string | null };
-        };
-
-        for (const row of json.data ?? []) {
-          if (row.postponed) continue;
-          const game = parseBdlGame(row);
-          if (game && isUpcoming(game)) collected.push(game);
-        }
-        cursor = json.meta?.next_cursor ?? null;
-      } while (cursor);
-
-      if (collected.length > 0) return dedupeGames(collected);
-      return collected;
-    } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
-    }
-  }
-
-  if (lastError) {
-    console.warn("[nbaSchedule] BDL fetch failed:", lastError.message);
-  }
-  return [];
-}
-
 async function fetchEspnGames(
   startDate: string,
   endDate: string,
@@ -258,7 +170,7 @@ async function fetchEspnGames(
     const url = `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${ymdToEspn(ymd)}`;
     try {
       const res = await fetch(url, {
-        headers: { Accept: "application/json" },
+        headers: ESPN_HEADERS,
         next: { revalidate: CACHE_SECONDS },
       });
       if (!res.ok) continue;
@@ -280,18 +192,12 @@ async function fetchAllUpcomingGames(): Promise<UpcomingGame[]> {
   const startDate = etYmd();
   const endDate = addDaysYmd(startDate, SLATE_LOOKAHEAD_DAYS);
 
-  const apiKey = bdlApiKey();
-  if (apiKey) {
-    const bdl = await fetchBdlGames(startDate, endDate, apiKey);
-    if (bdl.length > 0) return bdl;
-  }
-
   return fetchEspnGames(startDate, endDate);
 }
 
 /**
  * Upcoming games for the next week (ET). Cached ~1h.
- * Uses BALLDONTLIE when `BALLDONTLIE_API_KEY` is set; otherwise ESPN scoreboard.
+ * Source: ESPN scoreboard (one request per day in the window).
  */
 export async function getUpcomingGames(): Promise<UpcomingGame[]> {
   const day = etYmd();

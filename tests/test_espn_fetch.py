@@ -327,6 +327,75 @@ def test_refresh_incremental_refetches_from_day_before_latest(tmp_path, monkeypa
     assert set(ef.RAW_COLUMNS) <= set(on_disk.columns)
 
 
+REFETCH_TODAY = date(2026, 11, 21)
+
+
+def _refetch_setup(tmp_path, monkeypatch, final_summary, board):
+    """
+    Partial row on 2026-11-11 (the fixture game's ET date), latest cached game on
+    11-20: the normal incremental window (11-19..11-21) would never revisit 11-11.
+    """
+    cache = tmp_path / "raw.csv"
+    durant_pid = 3202 + 1
+    pd.DataFrame(
+        [
+            _raw(durant_pid, "2026-11-11", 18439000, 3, "Kevin Durant"),  # partial BALLDONTLIE-era row
+            _raw(durant_pid, "2026-11-20", 18440000, 25, "Kevin Durant"),
+            _raw(77, "2026-04-12", 22501200, 12, "Old Season", season="2025-26"),
+        ],
+    ).to_csv(cache, index=False)
+    asked: list[date] = []
+
+    def fake_board(d: date) -> dict:
+        asked.append(d)
+        return {"events": [event(board, "401909974")]} if d == date(2026, 11, 11) else {"events": []}
+
+    monkeypatch.setattr(ef, "fetch_scoreboard", fake_board)
+    monkeypatch.setattr(ef, "fetch_summary", lambda eid: final_summary)
+    return cache, durant_pid, asked
+
+
+def _durant_on(out: pd.DataFrame, pid: int, day: str) -> list:
+    rows = out[(out["PLAYER_ID"] == pid) & (out["GAME_DATE"].astype(str).str[:10] == day)]
+    return rows["PTS"].tolist()
+
+
+def test_incremental_alone_never_heals_old_partial_rows(tmp_path, monkeypatch, final_summary, board):
+    cache, durant_pid, asked = _refetch_setup(tmp_path, monkeypatch, final_summary, board)
+    out = ef.refresh_raw_game_logs(
+        2025, 2026, out_path=cache, today=REFETCH_TODAY, mapper=_mapper_for(final_summary),
+    )
+    assert asked == [date(2026, 11, d) for d in (19, 20, 21)]
+    assert _durant_on(out, durant_pid, "2026-11-11") == [3]  # still the partial line
+
+
+def test_refetch_from_replaces_old_partial_rows(tmp_path, monkeypatch, final_summary, board):
+    cache, durant_pid, asked = _refetch_setup(tmp_path, monkeypatch, final_summary, board)
+    out = ef.refresh_raw_game_logs(
+        2025, 2026, out_path=cache, today=REFETCH_TODAY,
+        mapper=_mapper_for(final_summary), refetch_from=date(2026, 11, 10),
+    )
+    # Every day from the re-fetch date through today (incremental window deduped in).
+    assert asked == [date(2026, 11, d) for d in range(10, 22)]
+    assert _durant_on(out, durant_pid, "2026-11-11") == [20]  # healed: final line
+    assert _durant_on(out, durant_pid, "2026-11-20") == [25]  # no ESPN game that day: kept
+    assert (out["PLAYER_ID"] == 77).sum() == 1  # outside the range: untouched
+
+
+def test_refetch_from_env_var(tmp_path, monkeypatch, final_summary, board):
+    cache, durant_pid, asked = _refetch_setup(tmp_path, monkeypatch, final_summary, board)
+    monkeypatch.setenv("ESPN_REFETCH_FROM", "2026-11-11")
+    out = ef.refresh_raw_game_logs(
+        2025, 2026, out_path=cache, today=REFETCH_TODAY, mapper=_mapper_for(final_summary),
+    )
+    assert asked[0] == date(2026, 11, 11)
+    assert _durant_on(out, durant_pid, "2026-11-11") == [20]
+    monkeypatch.setenv("ESPN_REFETCH_FROM", "11/11/2026")
+    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+        ef.refresh_raw_game_logs(2025, 2026, out_path=cache, today=REFETCH_TODAY,
+                                 mapper=_mapper_for(final_summary))
+
+
 def test_refresh_cold_start_fetches_whole_season(tmp_path, monkeypatch):
     cache = tmp_path / "raw.csv"
     asked: list[date] = []

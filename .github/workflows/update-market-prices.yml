@@ -2,6 +2,11 @@ name: Update Market Prices
 
 on:
   workflow_dispatch:
+    inputs:
+      espn_refetch_from:
+        description: "Optional: re-download ESPN finals from this date (YYYY-MM-DD) and replace stored rows. Empty = normal run."
+        required: false
+        default: ""
   schedule:
     # Every 15 minutes at :07/:22/:37/:52 UTC (avoids :00 UTC, where GitHub warns load can delay/drop schedules).
     # Omit `timezone:` so older GitHub versions still accept the workflow; see events docs for timezone-aware cron.
@@ -20,8 +25,8 @@ jobs:
     timeout-minutes: 45
     env:
       PYTHONUNBUFFERED: "1"
-      # Only used by the deprecated --fetch-balldontlie fallback; ESPN needs no key.
-      BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+      # Empty on scheduled runs; set from the manual-run input to repair a date range.
+      ESPN_REFETCH_FROM: ${{ github.event.inputs.espn_refetch_from || '' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
@@ -39,9 +44,11 @@ jobs:
 
       # Restore the newest raw_game_logs.csv (incremental fetch re-reads only the last day or two).
       # Cache keys are immutable, so every run saves under its own key and restore picks the newest
-      # prefix match. `bdl-raw-v1-` is the BALLDONTLIE-era cache: the first ESPN run restores it so
-      # ESPN athletes map onto the player ids the market already uses.
+      # prefix match. `bdl-raw-v1-` (BALLDONTLIE era) is the last resort: it keeps every player id
+      # the market already uses, but holds partial in-progress box scores, so the fetch step below
+      # re-downloads every final since BALLDONTLIE took over whenever that cache is restored.
       - name: Restore cached raw game logs
+        id: raw-cache
         uses: actions/cache/restore@v4
         with:
           path: data/raw_game_logs.csv
@@ -51,7 +58,14 @@ jobs:
             bdl-raw-v1-
 
       - name: Fetch NBA data and rebuild Fair Value
-        run: python pipeline/run_pipeline.py --fetch-espn --active
+        env:
+          MATCHED_CACHE_KEY: ${{ steps.raw-cache.outputs.cache-matched-key }}
+        run: |
+          if [[ "$MATCHED_CACHE_KEY" == bdl-raw-v1-* && -z "$ESPN_REFETCH_FROM" ]]; then
+            echo "Restored the BALLDONTLIE-era cache ($MATCHED_CACHE_KEY): re-fetching every final since 2026-04-12 to replace partial box scores."
+            export ESPN_REFETCH_FROM=2026-04-12
+          fi
+          python pipeline/run_pipeline.py --fetch-espn --active
 
       - name: Upload raw game logs cache
         if: success()

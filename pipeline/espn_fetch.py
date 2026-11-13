@@ -691,6 +691,17 @@ def _force_full_fetch() -> bool:
     return (os.environ.get("PIPELINE_FULL_FETCH") or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _refetch_from_env() -> date | None:
+    """``ESPN_REFETCH_FROM=YYYY-MM-DD`` (empty/unset = normal incremental run)."""
+    raw = (os.environ.get("ESPN_REFETCH_FROM") or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError(f"ESPN_REFETCH_FROM must be YYYY-MM-DD, got {raw!r}") from exc
+
+
 def season_dates(start_year: int, today: date) -> list[date]:
     """
     Every day in ESPN's window for the season starting in ``start_year`` (up to
@@ -726,9 +737,14 @@ def refresh_raw_game_logs(
     today: date | None = None,
     mapper: EspnPlayerMapper | None = None,
     map_csv: Path | None = None,
+    refetch_from: date | None = None,
 ) -> pd.DataFrame:
     """
     Merge cached raw logs with final ESPN box scores and write ``out_path``.
+
+    ``refetch_from`` / ``ESPN_REFETCH_FROM`` additionally re-downloads every day from
+    that date through today and replaces the stored rows for those days (repairs the
+    partial in-progress box scores the BALLDONTLIE-era cache kept).
 
     Incremental by default: re-fetch (latest cached current-season date − 1 day)
     through today (ET). A missing prior season or current season is fetched in full;
@@ -754,6 +770,10 @@ def refresh_raw_game_logs(
         if start_year != end_year and not _season_has_rows(existing, prior):
             print(f"ESPN: prior season {prior} missing from cache — full fetch of that season.")
             days.extend(season_dates(start_year, today))
+        refetch_from = refetch_from or _refetch_from_env()
+        if refetch_from:
+            print(f"ESPN: re-fetching every final from {refetch_from} to {today} (replacing stored rows).")
+            days.extend(date_range(refetch_from, today))
         anchor = _max_game_date(existing, current)
         if anchor:
             first = anchor - timedelta(days=1)

@@ -106,14 +106,19 @@ order by abs(live_fair_value - base_fair_value) desc limit 20;
 
 To pause the tick: `select cron.unschedule('market-tick-5min');`. To resume, re-run the schedule block. Prices simply fall back to moving every 15 minutes.
 
-## BALLDONTLIE
+## BALLDONTLIE (removed)
 
-The pipeline now uses ESPN by default. Keep the BALLDONTLIE subscription for about a week while you compare:
-- prices,
-- the id-mapping log,
-- `player_live_games`.
+The pipeline uses ESPN only. BALLDONTLIE was removed after the first ESPN run showed its stored box
+scores were partial: the old incremental fetch saved games still in progress and never replaced them
+(on 2026-10-28, 98 of 230 player lines were short by 3+ minutes).
 
-Then cancel it. `--fetch-balldontlie` stays in the code as a fallback, and the workflow no longer requires `BALLDONTLIE_API_KEY`.
+The repair is automatic: whenever a run can only restore the BALLDONTLIE-era `bdl-raw-v1-` cache
+(the first run on `main` after merging), it re-downloads every final since 2026-04-12 and replaces
+those rows. To repair any other range by hand: **Actions → Update Market Prices → Run workflow →
+`espn_refetch_from`**, or locally `python pipeline/run_pipeline.py --fetch-espn --active --espn-refetch-from YYYY-MM-DD`.
+
+Remove `BALLDONTLIE_API_KEY` from GitHub secrets and Vercel env vars, then cancel the subscription.
+
 
 ## Limits and risks
 

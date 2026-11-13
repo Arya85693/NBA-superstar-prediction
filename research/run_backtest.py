@@ -4,7 +4,7 @@ CLI entry point for the Hoops Stock Market research backtest framework.
 
 Usage (from repo root):
   pip install -r requirements.txt -r research/requirements.txt
-  python pipeline/run_pipeline.py --fetch-balldontlie --active   # if data missing
+  python pipeline/run_pipeline.py --fetch-espn --active   # if data missing
   python research/run_backtest.py
   python research/run_backtest.py --config research/config/default.yaml
 """

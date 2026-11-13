@@ -2,12 +2,12 @@
 Run the lighter long-term market updater locally (matches CI / production fetch).
 
 Default: ESPN (`run_pipeline.py --fetch-espn --active`), then sync to Supabase.
-Loads `web/.env.local` when present (Supabase keys; `BALLDONTLIE_API_KEY` only for the fallback).
+Loads `web/.env.local` when present (Supabase keys).
 
 `PRICES_FETCH_SOURCE` picks the fetch:
   espn (default)  ESPN box scores + rosters, no key (`--fetch-espn --active`)
-  balldontlie     deprecated fallback, needs `BALLDONTLIE_API_KEY` (`--fetch-balldontlie --active`)
   nba_api         legacy stats.nba.com fallback (`--fetch --active`)
+`ESPN_REFETCH_FROM=YYYY-MM-DD` re-downloads finals from that date (see run_pipeline.py).
 """
 from __future__ import annotations
 
@@ -42,23 +42,12 @@ def _fetch_args(env: dict[str, str]) -> list[str]:
             file=sys.stderr,
         )
         return ["--fetch", "--active"]
-    if source not in ("balldontlie", "bdl", "balldontlie.io"):
-        if source not in ("espn", ""):
-            print(
-                f"Unknown PRICES_FETCH_SOURCE={source!r}; defaulting to ESPN.",
-                file=sys.stderr,
-            )
-        return ["--fetch-espn", "--active"]
-    print(
-        "PRICES_FETCH_SOURCE=balldontlie — using the deprecated BALLDONTLIE fallback.",
-        file=sys.stderr,
-    )
-    if not (env.get("BALLDONTLIE_API_KEY") or "").strip():
+    if source not in ("espn", ""):
         print(
-            "Warning: BALLDONTLIE_API_KEY is not set. Add it to web/.env.local or the environment.",
+            f"Unknown PRICES_FETCH_SOURCE={source!r} (BALLDONTLIE was removed); using ESPN.",
             file=sys.stderr,
         )
-    return ["--fetch-balldontlie", "--active"]
+    return ["--fetch-espn", "--active"]
 
 
 def main() -> None:
