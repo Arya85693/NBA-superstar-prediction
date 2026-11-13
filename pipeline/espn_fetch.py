@@ -74,6 +74,13 @@ DATA_DIR = sw.DATA_DIR
 RAW_GAME_LOGS_CSV = DATA_DIR / "raw_game_logs.csv"
 
 DEFAULT_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
+# Same API on ESPN's second host; used when a box score 404s on the primary one.
+FALLBACK_SUMMARY_BASE_URL = "https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba"
+# ESPN occasionally 404s a box score that exists (seen in CI for a final playoff game).
+SUMMARY_NOT_FOUND_ATTEMPTS = 3
+# A run may skip at most this many unfetchable box scores (or 5% of finals, if larger)
+# before failing; skipped games keep their stored rows and are reported.
+MAX_SKIPPED_SUMMARIES = 3
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -190,10 +197,42 @@ _RETRYABLE = (
 )
 
 
-def _request_json(path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
-    """GET {base}{path}?{params} with pacing and retries (network errors, 429, 5xx)."""
+class EspnHttpError(RuntimeError):
+    """An HTTP error status from ESPN after retries (``code`` is the status)."""
+
+    def __init__(self, code: int, url: str, body: str) -> None:
+        super().__init__(f"ESPN HTTP {code} for {url}: {body}")
+        self.code = code
+        self.url = url
+
+
+def _error_body(e: urllib.error.HTTPError) -> str:
+    """First bytes of an error response, gunzipped when needed (ESPN gzips 404 pages)."""
+    try:
+        raw_body = e.read() or b""
+    except Exception:  # noqa: BLE001
+        return ""
+    try:
+        raw_body = gzip.decompress(raw_body)
+    except (OSError, EOFError, zlib.error):
+        pass
+    return raw_body[:300].decode("utf-8", errors="replace")
+
+
+def _request_json(
+    path: str,
+    params: dict[str, str] | None = None,
+    *,
+    base: str | None = None,
+    retry_not_found: bool = False,
+    attempts: int = MAX_ATTEMPTS,
+) -> dict[str, Any]:
+    """
+    GET {base}{path}?{params} with pacing and retries (network errors, 429, 5xx;
+    404 too when ``retry_not_found``).
+    """
     qs = urllib.parse.urlencode(params or {})
-    url = f"{_base_url()}{path}" + (f"?{qs}" if qs else "")
+    url = f"{(base or _base_url()).rstrip('/')}{path}" + (f"?{qs}" if qs else "")
     req = urllib.request.Request(
         url,
         headers={
@@ -203,7 +242,7 @@ def _request_json(path: str, params: dict[str, str] | None = None) -> dict[str, 
         },
         method="GET",
     )
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, attempts + 1):
         time.sleep(_env_float("ESPN_REQUEST_PAUSE_SECONDS", 0.3))
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
@@ -213,18 +252,17 @@ def _request_json(path: str, params: dict[str, str] | None = None) -> dict[str, 
                 raise EspnShapeError(f"ESPN {path}: expected a JSON object, got {type(payload).__name__}")
             return payload
         except urllib.error.HTTPError as e:
-            retryable = e.code == 429 or e.code >= 500
-            if not retryable or attempt == MAX_ATTEMPTS:
-                body = e.read()[:300].decode("utf-8", errors="replace")
-                raise RuntimeError(f"ESPN HTTP {e.code} for {url}: {body}") from e
+            retryable = e.code == 429 or e.code >= 500 or (retry_not_found and e.code == 404)
+            if not retryable or attempt == attempts:
+                raise EspnHttpError(e.code, url, _error_body(e)) from e
             wait = 2.0**attempt
-            print(f"ESPN HTTP {e.code}; retry {attempt}/{MAX_ATTEMPTS - 1} in {wait:.0f}s…")
+            print(f"ESPN HTTP {e.code} for {path}; retry {attempt}/{attempts - 1} in {wait:.0f}s…")
             time.sleep(wait)
         except _RETRYABLE as e:
-            if attempt == MAX_ATTEMPTS:
-                raise RuntimeError(f"ESPN request failed after {MAX_ATTEMPTS} attempts: {url} ({e})") from e
+            if attempt == attempts:
+                raise RuntimeError(f"ESPN request failed after {attempts} attempts: {url} ({e})") from e
             wait = 2.0**attempt
-            print(f"ESPN network error ({type(e).__name__}: {e}); retry {attempt}/{MAX_ATTEMPTS - 1} in {wait:.0f}s…")
+            print(f"ESPN network error ({type(e).__name__}: {e}); retry {attempt}/{attempts - 1} in {wait:.0f}s…")
             time.sleep(wait)
     raise AssertionError("unreachable")
 
@@ -234,7 +272,20 @@ def fetch_scoreboard(day: date) -> dict[str, Any]:
 
 
 def fetch_summary(event_id: str) -> dict[str, Any]:
-    return _request_json("/summary", {"event": str(event_id)})
+    """Box score for one game: primary host (404s retried), then ESPN's second host."""
+    params = {"event": str(event_id)}
+    try:
+        return _request_json(
+            "/summary", params, retry_not_found=True, attempts=SUMMARY_NOT_FOUND_ATTEMPTS,
+        )
+    except EspnHttpError as e:
+        if e.code != 404:
+            raise
+        print(f"ESPN summary {event_id}: 404 on primary host; trying {FALLBACK_SUMMARY_BASE_URL}")
+        return _request_json(
+            "/summary", params, base=FALLBACK_SUMMARY_BASE_URL,
+            retry_not_found=True, attempts=SUMMARY_NOT_FOUND_ATTEMPTS,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -519,6 +570,8 @@ def collect_dates(
     get_summary = summary or fetch_summary
     frames: list[pd.DataFrame] = []
     seen_events: set[str] = set()
+    skipped: list[tuple[date, str, str]] = []  # (day, event_id, error)
+    attempted = 0
     for day in days:
         board = get_board(day)
         events = board.get("events")
@@ -535,12 +588,32 @@ def collect_dates(
                     skipped_live += 1
                 continue
             seen_events.add(event_id)
-            frame = parse_summary(get_summary(event_id), event)
+            attempted += 1
+            try:
+                summary_json = get_summary(event_id)
+            except (EspnHttpError, RuntimeError) as e:
+                # Stored rows for this game (if any) stay as they are; reported below.
+                skipped.append((day, event_id, str(e)[:160]))
+                print(f"ESPN {day.isoformat()}: WARNING could not fetch box score {event_id}: {str(e)[:160]}")
+                continue
+            frame = parse_summary(summary_json, event)
             if not frame.empty:
                 frames.append(frame)
                 final_n += 1
         note = f", {skipped_live} not final (skipped)" if skipped_live else ""
         print(f"ESPN {day.isoformat()}: {len(events)} events, {final_n} final ingested{note}")
+    if skipped:
+        limit = max(MAX_SKIPPED_SUMMARIES, int(0.05 * attempted))
+        listing = "; ".join(f"{d.isoformat()} event {eid}" for d, eid, _ in skipped)
+        if len(skipped) > limit:
+            raise RuntimeError(
+                f"ESPN: {len(skipped)} of {attempted} box scores could not be fetched "
+                f"(limit {limit}); refusing to continue: {listing}",
+            )
+        print(
+            f"ESPN: WARNING skipped {len(skipped)} unfetchable box score(s), stored rows kept: "
+            f"{listing}. A later run (or --espn-refetch-from) picks them up.",
+        )
     if not frames:
         return pd.DataFrame(columns=[*RAW_COLUMNS, ESPN_ID_COL])
     return pd.concat(frames, ignore_index=True)

@@ -529,3 +529,61 @@ def test_request_json_does_not_retry_404(monkeypatch):
     with pytest.raises(RuntimeError, match="HTTP 404"):
         ef._request_json("/summary", {"event": "1"})
     assert calls["n"] == 1
+
+
+def test_fetch_summary_retries_404_then_uses_second_host(monkeypatch):
+    """ESPN 404'd a real final playoff box score in CI; the second host serves it."""
+    monkeypatch.setattr(ef.time, "sleep", lambda s: None)
+    hosts: list[str] = []
+
+    def fake_urlopen(req, timeout=None):
+        host = urllib.parse.urlparse(req.full_url).netloc
+        hosts.append(host)
+        if host == "site.api.espn.com":
+            raise urllib.error.HTTPError(req.full_url, 404, "missing", {}, io.BytesIO(gzip.compress(b"gone")))
+        return _Resp({"boxscore": {"players": []}})
+
+    monkeypatch.setattr(ef.urllib.request, "urlopen", fake_urlopen)
+    assert ef.fetch_summary("401869391") == {"boxscore": {"players": []}}
+    assert hosts == ["site.api.espn.com"] * ef.SUMMARY_NOT_FOUND_ATTEMPTS + ["site.web.api.espn.com"]
+
+
+def test_http_error_body_is_gunzipped(monkeypatch):
+    monkeypatch.setattr(ef.time, "sleep", lambda s: None)
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 404, "x", {}, io.BytesIO(gzip.compress(b"Not Found page")))
+
+    monkeypatch.setattr(ef.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(ef.EspnHttpError, match="Not Found page") as info:
+        ef._request_json("/summary", {"event": "1"})
+    assert info.value.code == 404
+
+
+def _finals(board: dict, ids: list[str]) -> list[dict]:
+    base = event(board, "401909974")
+    return [{**base, "id": eid} for eid in ids]
+
+
+def test_collect_dates_skips_one_unfetchable_box_score(board, final_summary):
+    events = _finals(board, ["1", "2", "3"])
+
+    def summary(eid: str) -> dict:
+        if eid == "2":
+            raise ef.EspnHttpError(404, "https://x/summary?event=2", "gone")
+        return final_summary
+
+    out = ef.collect_dates([date(2026, 11, 11)], scoreboard=lambda d: {"events": events}, summary=summary)
+    one_game = len(ef.parse_summary(final_summary, events[0]))
+    assert one_game > 0
+    assert len(out) == 2 * one_game  # games 1 and 3 ingested, game 2 skipped
+
+
+def test_collect_dates_fails_when_many_box_scores_fail(board):
+    events = _finals(board, [str(i) for i in range(10)])
+
+    def summary(eid: str) -> dict:
+        raise ef.EspnHttpError(404, f"https://x/summary?event={eid}", "gone")
+
+    with pytest.raises(RuntimeError, match="could not be fetched"):
+        ef.collect_dates([date(2026, 11, 11)], scoreboard=lambda d: {"events": events}, summary=summary)
