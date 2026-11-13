@@ -18,12 +18,22 @@ export function BrandLogo({
       href="/"
       className={`group flex shrink-0 items-center gap-2.5 ${className}`.trim()}
     >
+      {/* Same mark in the theme's magenta -> azure; the light file uses the deeper light-theme tones. */}
       <Image
-        src="/logo.png"
+        src="/brand-mark-dark.png"
         alt=""
         width={size}
         height={size}
-        className="object-contain"
+        className="hs-brand-mark hidden object-contain dark:block"
+        style={{ width: size, height: size }}
+        priority
+      />
+      <Image
+        src="/brand-mark-light.png"
+        alt=""
+        width={size}
+        height={size}
+        className="hs-brand-mark object-contain dark:hidden"
         style={{ width: size, height: size }}
         priority
       />

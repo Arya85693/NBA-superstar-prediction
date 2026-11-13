@@ -954,6 +954,11 @@ body::after {
     color: var(--charcoal);
   }
 
+  /* Synthwave: soft magenta glow on the logo mark (dark theme only) */
+  .dark .hs-brand-mark {
+    filter: drop-shadow(0 0 6px rgb(255 79 216 / 0.35));
+  }
+
   .hs-wordmark {
     font-family: var(--font-display), var(--font-geist-sans), sans-serif;
     letter-spacing: 0.02em;
